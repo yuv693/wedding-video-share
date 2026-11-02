@@ -20,7 +20,7 @@ Flutter Android app for private wedding-video sharing.
 - Saved Google Drive upload-session recovery when the customer reselects the same file.
 - Server-side file metadata/size verification before creating a private receiver link.
 - Copyable private guest link and receiver download service.
-- GitHub Actions workflow builds a release Android App Bundle and an installable Android APK, and saves the generated Android project files and dependency lockfile into the repository. The current Android release build uses the debug signing key for development/testing only.
+- GitHub Actions workflow builds a release Android App Bundle and an installable Android APK, and saves the generated Android project files and dependency lockfile into the repository. The workflow uses a debug signing key unless all four Android signing secrets are configured. With the secrets present, it produces a Play Store upload-signed AAB.
 
 ## Launch checklist
 - [Provider setup and Play Store launch checklist](docs/LAUNCH_SETUP.md)
