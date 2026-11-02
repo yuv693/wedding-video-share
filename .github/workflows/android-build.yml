@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -73,6 +73,16 @@ jobs:
               s = s.replace("compileSdk flutter.compileSdkVersion", "compileSdk 36")
               p.write_text(s)
           PY
+
+      - name: Save generated Android project files to repository
+        run: |
+          git add android
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Add generated Android platform project"
+            git push
+          fi
 
       - name: Build Android App Bundle
         run: flutter build appbundle --release
