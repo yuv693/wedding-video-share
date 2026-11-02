@@ -11,6 +11,7 @@ This policy explains how Wedding Video Share handles information when you use th
 - **Video information:** filename, file size, MIME type, Google Drive file identifier and upload status. The video itself is stored in your Google Drive, not in Wedding Video Share's own video-storage bucket.
 - **Payment information:** order identifiers, payment status, amount, currency and gateway references from Razorpay. Card numbers, UPI PINs and banking passwords are handled by the payment provider and are not requested by this app.
 - **Sharing and download records:** share-link records and server-side transfer status, including expected and transferred byte counts, to determine whether a receiver transfer reached the end of the video.
+- **Technical information:** service providers may process IP addresses, request timestamps, device/browser details and security logs when you sign in, upload or download.
 
 ## How information is used
 
