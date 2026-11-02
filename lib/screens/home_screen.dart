@@ -236,6 +236,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _openLegal(String document) async {
+    final uri = Uri.parse('https://github.com/yuv693/wedding-video-share/blob/main/docs/$document');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   Future<void> _copyShareLink() async {
     if (_shareUrl == null) return;
     await Clipboard.setData(ClipboardData(text: _shareUrl!));
@@ -393,8 +398,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
               const SizedBox(height: 20),
-              const Text('Need help? Contact the Wedding Video Share support team.',
-                textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, fontSize: 12)),
+              const Text('Wedding Video Share', textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.black54, fontSize: 12)),
+              Wrap(
+                alignment: WrapAlignment.center,
+                children: [
+                  TextButton(onPressed: () => _openLegal('privacy-policy.md'), child: const Text('Privacy Policy')),
+                  TextButton(onPressed: () => _openLegal('terms-of-service.md'), child: const Text('Terms of Service')),
+                ],
+              ),
             ],
           ),
         ),
