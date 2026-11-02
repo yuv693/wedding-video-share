@@ -35,7 +35,7 @@ Rotating the encryption key before customer tokens are stored avoids losing the 
 1. Create or select the Razorpay account and use test-mode keys first.
 2. In Supabase Edge Function Secrets, set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET`.
 3. Add this webhook URL in Razorpay:
-   `https://mnaswhizatnwfwmjmtvm.supabase.co/functions/v1/razorpay-payments`
+   `https://mnaswhizatnwfwmjmtvm.supabase.co/functions/v1/razorpay-payments/webhook`
 4. Subscribe to `payment.captured` and `payment.failed`.
 5. Complete a test payment and confirm the order becomes paid only after the webhook is received.
 6. Only after successful test verification should live keys be used.
