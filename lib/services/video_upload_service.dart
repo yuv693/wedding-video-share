@@ -219,40 +219,37 @@ class VideoUploadService {
     required PlatformFile file,
     required String mime,
   }) async {
-    try {
-      final resume = await supabase.functions.invoke('google-drive-storage', body: {
-        'action': 'resume_upload',
-        'orderId': orderId,
-      });
-      final data = _asMap(resume.data);
-      if (resume.status == 200 && data['ok'] == true &&
-          data['filename'] == file.name &&
-          int.tryParse('${data['expectedSizeBytes']}') == file.size &&
-          data['mimeType'] == mime && data['uploadUrl'] != null) {
-        final uri = Uri.parse(data['uploadUrl'].toString());
-        final probe = await http.put(
-          uri,
-          headers: {
-            'Content-Length': '0',
-            'Content-Range': 'bytes */${file.size}',
-          },
-          body: Uint8List(0),
-        ).timeout(const Duration(seconds: 45));
-        if (probe.statusCode == 308) {
-          final offset = _acceptedOffset(probe.headers['range']);
-          return {'uploadUrl': uri.toString(), 'resumeOffset': offset};
-        }
-        if (probe.statusCode == 200 || probe.statusCode == 201) {
-          final id = _fileIdFromResponse(probe, file.size);
-          if (id != null) return {'uploadUrl': uri.toString(), 'resumeOffset': file.size, 'completedFileId': id};
-        }
-        if (probe.statusCode != 404 && probe.statusCode != 410) {
-          throw Exception('Could not check the saved Google Drive upload session (HTTP ${probe.statusCode}).');
+    final resume = await supabase.functions.invoke('google-drive-storage', body: {
+      'action': 'resume_upload',
+      'orderId': orderId,
+    });
+    final resumeData = _asMap(resume.data);
+    if (resume.status == 200 && resumeData['ok'] == true &&
+        resumeData['filename'] == file.name &&
+        int.tryParse('${resumeData['expectedSizeBytes']}') == file.size &&
+        resumeData['mimeType'] == mime && resumeData['uploadUrl'] != null) {
+      final uri = Uri.parse(resumeData['uploadUrl'].toString());
+      final probe = await http.put(
+        uri,
+        headers: {
+          'Content-Length': '0',
+          'Content-Range': 'bytes */${file.size}',
+        },
+        body: Uint8List(0),
+      ).timeout(const Duration(seconds: 45));
+      if (probe.statusCode == 308) {
+        final offset = _acceptedOffset(probe.headers['range']);
+        return {'uploadUrl': uri.toString(), 'resumeOffset': offset};
+      }
+      if (probe.statusCode == 200 || probe.statusCode == 201) {
+        final id = _fileIdFromResponse(probe, file.size);
+        if (id != null) {
+          return {'uploadUrl': uri.toString(), 'resumeOffset': file.size, 'completedFileId': id};
         }
       }
-    } catch (e) {
-      if (e.toString().contains('Could not check the saved Google Drive upload session')) rethrow;
-      // No saved matching session: start a new one below.
+      if (probe.statusCode != 404 && probe.statusCode != 410) {
+        throw Exception('Could not check the saved Google Drive upload session (HTTP ${probe.statusCode}).');
+      }
     }
 
     final start = await supabase.functions.invoke('google-drive-storage', body: {
@@ -262,10 +259,10 @@ class VideoUploadService {
       'sizeBytes': file.size,
       'mimeType': mime,
     });
-    final data = _asMap(start.data);
-    if (start.status != 200 || data['ok'] != true || data['uploadUrl'] == null) {
-      throw Exception(data['error']?.toString() ?? 'Could not start Google Drive upload.');
+    final startData = _asMap(start.data);
+    if (start.status != 200 || startData['ok'] != true || startData['uploadUrl'] == null) {
+      throw Exception(startData['error']?.toString() ?? 'Could not start Google Drive upload.');
     }
-    return {'uploadUrl': data['uploadUrl'].toString(), 'resumeOffset': 0};
+    return {'uploadUrl': startData['uploadUrl'].toString(), 'resumeOffset': 0};
   }
 }
