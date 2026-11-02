@@ -38,6 +38,25 @@ jobs:
             flutter create --platforms=android --project-name wedding_video_share .
           fi
 
+      - name: Configure Google Drive return link
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          intent = '''
+                  <intent-filter>
+                      <action android:name="android.intent.action.VIEW" />
+                      <category android:name="android.intent.category.DEFAULT" />
+                      <category android:name="android.intent.category.BROWSABLE" />
+                      <data android:scheme="weddingvideoshare" android:host="drive-connected" />
+                  </intent-filter>
+          '''
+          if 'android:scheme="weddingvideoshare"' not in s:
+              s = s.replace("</activity>", intent + "\\n        </activity>")
+              p.write_text(s)
+          PY
+
       - name: Build Android App Bundle
         run: flutter build appbundle --release
 
