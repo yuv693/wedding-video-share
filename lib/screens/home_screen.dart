@@ -33,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onPaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _onExternalWallet);
     _linkSubscription = _appLinks.uriLinkStream.listen(_handleIncomingLink);
-    _appLinks.getInitialLink().then(_handleIncomingLink).catchError((_) {});
+    unawaited(_loadInitialLink());
     _refresh();
   }
 
@@ -42,6 +42,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _linkSubscription?.cancel();
     _razorpay.clear();
     super.dispose();
+  }
+
+  Future<void> _loadInitialLink() async {
+    try {
+      _handleIncomingLink(await _appLinks.getInitialLink());
+    } catch (_) {}
   }
 
   void _handleIncomingLink(Uri? uri) {
