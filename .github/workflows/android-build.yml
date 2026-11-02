@@ -92,9 +92,19 @@ jobs:
       - name: Build Android App Bundle
         run: flutter build appbundle --release
 
+      - name: Build installable Android APK
+        run: flutter build apk --release
+
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
           name: wedding-video-share-android-aab
           path: build/app/outputs/bundle/release/*.aab
+          if-no-files-found: error
+
+      - name: Upload installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: wedding-video-share-android-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
