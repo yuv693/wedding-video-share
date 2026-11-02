@@ -43,8 +43,14 @@ Rotating the encryption key before customer tokens are stored avoids losing the 
 ## 5. Android and Play Store
 
 - Android application ID: `com.weddingvideoshare.app`. Confirm it is the final package ID before first publication.
-- Create a secure Android upload keystore and keep its passwords/private file outside the repository.
-- Configure release signing securely in the build environment. The current workflow uses Flutter's debug signing configuration for development/testing and is not Play Store release signing.
+- Create a secure Android upload keystore on a trusted computer. Keep the keystore file and passwords outside the repository.
+- Add these four GitHub repository Actions secrets under **Settings → Secrets and variables → Actions**:
+  - `ANDROID_KEYSTORE_BASE64`: base64-encoded keystore file (encode with `base64 -w 0 upload-keystore.jks` on Linux/macOS; on PowerShell use `[Convert]::ToBase64String([IO.File]::ReadAllBytes("upload-keystore.jks"))`).
+  - `ANDROID_KEY_ALIAS`: the alias chosen when creating the keystore.
+  - `ANDROID_KEY_PASSWORD`: that key's password.
+  - `ANDROID_STORE_PASSWORD`: the keystore password.
+- The GitHub Actions workflow automatically uses the upload keystore when all four secrets are present. If they are absent, the build is development-signed and must not be uploaded to Play Console.
+- Never upload the keystore or passwords to GitHub files, chat or screenshots. Back up the keystore securely; losing it can prevent future app updates.
 - Create the Play Store listing, app screenshots, store icon, content rating, data-safety declarations and app-access instructions.
 - Publish the privacy policy and terms at stable public HTTPS URLs, and add a monitored support contact to both documents.
 
