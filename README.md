@@ -3,33 +3,37 @@
 Flutter Android app for private wedding-video sharing.
 
 ## Product rules
-- One paid account (₹290) allows one wedding-video upload/share cycle.
-- Maximum video size is 15,000,000,000 bytes (15 GB decimal).
-- Video storage belongs to the customer's own Google Drive.
-- The app must never delete the phone's original video.
-- Upload locks only after the server verifies the complete receiver transfer.
-- A new video requires a new account and a new ₹290 payment.
+- One paid customer account (₹290) allows one wedding-video upload/share cycle.
+- Maximum video size: 15,000,000,000 bytes (15 GB decimal).
+- The video is stored in the customer's own Google Drive.
+- The app never deletes the original video from the phone.
+- Upload locks only after the server verifies the full receiver transfer.
+- A new wedding video requires a new account and a new ₹290 payment.
 
-## Current app foundation
+## Implemented app flows
 - Ivory and burgundy Flutter interface.
-- Supabase email OTP and phone OTP sign-in screens.
-- Authenticated customer dashboard.
-- Google Drive OAuth launch and Android return-link handling.
-- Google Drive quota display.
-- Razorpay ₹290 checkout launch.
-- GitHub Actions workflow for Android App Bundle builds.
+- Supabase email OTP and phone OTP sign-in.
+- Authenticated customer dashboard and sign-out.
+- Google Drive OAuth connection, Android deep-link return and quota display.
+- Razorpay ₹290 checkout; payment remains pending until the server webhook verifies it.
+- Android video picker with streaming upload to Google Drive in 8 MB resumable chunks.
+- Saved Google Drive upload-session recovery when the customer reselects the same file.
+- Server-side file metadata/size verification before creating a private receiver link.
+- Copyable private guest link and receiver download service.
+- GitHub Actions workflow builds a release Android App Bundle and saves the generated Android project files into the repository.
 
-## Remaining before launch
-- Configure Supabase email OTP and SMS providers.
-- Rotate the Google token-encryption secret before any customer connects Drive.
-- Configure and test Razorpay credentials and webhook.
-- Complete and test large-video upload, private sharing and receiver download on real Android devices.
-- Configure Play Store signing and listing.
+## Still required before public launch
+- Configure the Supabase email template to include `{{ .Token }}` for numeric email OTP.
+- Enable phone authentication and configure a paid SMS provider in Supabase.
+- Replace the previously exposed Google token-encryption secret with a fresh random 32-byte base64 key before any real customer connects Google Drive.
+- Configure Razorpay keys and webhook in test mode, then run a verified payment test.
+- Test Google OAuth, large-file upload/resume, guest download and upload-lock behavior on real Android devices.
+- Configure Android release signing, Play Store listing, privacy policy and terms.
 
-The app's payment success callback is not treated as proof of payment; the server webhook is authoritative. The download service records full server-observed byte transfer, but does not prove the receiver device saved the file to disk or verify a checksum.
+The app's client-side payment callback is never treated as proof of payment; the server webhook is authoritative. The receiver download service verifies that the expected number of bytes reached end-of-stream at the server. It does not prove the receiver device saved the file to disk and does not verify a checksum.
 
 ## Build
-GitHub Actions creates Android platform files when absent, then runs `flutter pub get` and `flutter build appbundle --release`. A successful build is uploaded as a workflow artifact.
+GitHub Actions creates the Android platform folder if absent, configures compile SDK 36 and the Google Drive return link, commits the generated Android project files, then runs `flutter pub get` and `flutter build appbundle --release`. A successful AAB is uploaded as a workflow artifact.
 
 ## Security
-Never commit service-role keys, OAuth client secrets, token-encryption keys, Razorpay secrets, or signing keystores. Configure secrets only in provider dashboards or GitHub Actions secrets.
+Never commit Supabase service-role keys, Google OAuth client secrets, Google token-encryption keys, Razorpay secrets, or Android signing keystores. Configure secrets only in provider dashboards or GitHub Actions secrets.
