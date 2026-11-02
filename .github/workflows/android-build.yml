@@ -57,6 +57,23 @@ jobs:
               p.write_text(s)
           PY
 
+      - name: Set Android compile SDK to 36
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android/app/build.gradle.kts")
+          if p.exists():
+              s = p.read_text()
+              s = s.replace("compileSdk = flutter.compileSdkVersion", "compileSdk = 36")
+              p.write_text(s)
+          else:
+              p = Path("android/app/build.gradle")
+              s = p.read_text()
+              s = s.replace("compileSdkVersion flutter.compileSdkVersion", "compileSdkVersion 36")
+              s = s.replace("compileSdk flutter.compileSdkVersion", "compileSdk 36")
+              p.write_text(s)
+          PY
+
       - name: Build Android App Bundle
         run: flutter build appbundle --release
 
