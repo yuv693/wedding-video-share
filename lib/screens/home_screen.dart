@@ -1,11 +1,14 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
+import '../services/video_upload_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,10 +18,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _razorpay = Razorpay();
+  final _uploadService = VideoUploadService();
   StreamSubscription<Uri>? _linkSubscription;
-  bool _busy = false;
-  String? _status, _driveEmail;
-  Map<String, dynamic>? _order, _quota;
+  bool _busy = false, _uploading = false;
+  double _uploadProgress = 0;
+  String? _status, _driveEmail, _shareUrl;
+  Map<String, dynamic>? _order, _quota, _video;
 
   @override
   void initState() {
@@ -28,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _onExternalWallet);
     _linkSubscription = AppLinks().uriLinkStream.listen((uri) {
       if (uri.scheme == 'weddingvideoshare' && uri.host == 'drive-connected' && mounted) {
-        setState(() => _status = 'Google Drive connection returned to the app. Refreshing account details…');
+        setState(() => _status = 'Google Drive connected. Refreshing account details…');
         _loadQuota();
       }
     });
@@ -58,9 +63,17 @@ class _HomeScreenState extends State<HomeScreen> {
       final row = await supabase.from('wedding_orders')
         .select('id,payment_status,upload_locked,workflow_status')
         .maybeSingle();
-      if (mounted) setState(() => _order = row);
+      if (!mounted) return;
+      setState(() => _order = row);
+      if (row != null) {
+        final video = await supabase.from('wedding_videos')
+          .select('id,original_filename,file_size_bytes,upload_status')
+          .eq('order_id', row['id'])
+          .maybeSingle();
+        if (mounted) setState(() => _video = video);
+      }
     } catch (_) {
-      if (mounted) setState(() => _status = 'Account status will appear after your first payment attempt.');
+      if (mounted) setState(() => _status = 'Account status could not be loaded. Pull down to refresh.');
     }
   }
 
@@ -72,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() { _quota = data; _driveEmail = data['email']?.toString(); });
       }
     } catch (_) {
-      // Google Drive must be connected before its quota can be read.
+      // No linked Drive account yet, or the server has not been configured.
     }
   }
 
@@ -129,8 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onPaymentSuccess(PaymentSuccessResponse response) {
     if (!mounted) return;
-    setState(() => _status = 'Payment submitted. The server webhook must verify it before upload is enabled.');
-    // A client callback is never treated as proof of payment.
+    setState(() => _status = 'Payment submitted. Waiting for secure server verification…');
     Future<void>.delayed(const Duration(seconds: 2), _loadOrder);
   }
 
@@ -140,6 +152,68 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onExternalWallet(ExternalWalletResponse response) {
     if (mounted) setState(() => _status = 'External wallet selected: ${response.walletName ?? 'wallet'}');
+  }
+
+  Future<void> _chooseAndUpload() async {
+    if (_order == null || _order!['payment_status'] != 'paid' || _order!['upload_locked'] == true) return;
+    setState(() { _busy = true; _status = null; _uploadProgress = 0; });
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+        allowMultiple: false,
+        withReadStream: true,
+        withData: false,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      if (!mounted) return;
+      setState(() { _uploading = true; _busy = false; _status = 'Uploading ${file.name}…'; });
+      final upload = await _uploadService.upload(
+        orderId: _order!['id'].toString(),
+        file: file,
+        onProgress: (value) {
+          if (mounted) setState(() => _uploadProgress = value);
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _shareUrl = upload.shareUrl;
+        _status = 'Video uploaded and verified. Your private receiver link is ready.';
+        _uploading = false;
+      });
+      await _loadOrder();
+    } catch (e) {
+      if (mounted) setState(() { _status = 'Upload: $e'; _uploading = false; });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _makeShareLink() async {
+    if (_order == null) return;
+    setState(() { _busy = true; _status = null; });
+    try {
+      final response = await supabase.functions.invoke('wedding-share', body: {
+        'action': 'create_share',
+        'orderId': _order!['id'],
+      });
+      final data = _map(response.data);
+      final url = data['shareUrl']?.toString();
+      if (response.status != 200 || data['ok'] != true || url == null) {
+        throw Exception(data['error']?.toString() ?? 'Could not create the private link.');
+      }
+      if (mounted) setState(() { _shareUrl = url; _status = 'A new private receiver link has been created.'; });
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Share link: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _copyShareLink() async {
+    if (_shareUrl == null) return;
+    await Clipboard.setData(ClipboardData(text: _shareUrl!));
+    if (mounted) setState(() => _status = 'Private link copied. Send it only to your wedding guests.');
   }
 
   String _bytes(dynamic value) {
@@ -154,11 +228,13 @@ class _HomeScreenState extends State<HomeScreen> {
     const burgundy = Color(0xFF6F2438);
     final user = supabase.auth.currentUser;
     final paid = _order?['payment_status'] == 'paid';
+    final locked = _order?['upload_locked'] == true;
+    final videoReady = _video?['upload_status'] == 'uploaded';
     return Scaffold(
       appBar: AppBar(
         title: const Text('Wedding Video Share', style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
-          IconButton(onPressed: _busy ? null : _refresh, icon: const Icon(Icons.refresh), tooltip: 'Refresh'),
+          IconButton(onPressed: _busy || _uploading ? null : _refresh, icon: const Icon(Icons.refresh), tooltip: 'Refresh'),
           IconButton(onPressed: () => supabase.auth.signOut(), icon: const Icon(Icons.logout), tooltip: 'Sign out'),
         ],
       ),
@@ -189,7 +265,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text(_driveEmail == null ? 'Your video will be stored in your own Google Drive.' : 'Connected: $_driveEmail'),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
-                    onPressed: _busy ? null : _connectDrive,
+                    onPressed: _busy || _uploading ? null : _connectDrive,
                     icon: const Icon(Icons.add_link),
                     label: Text(_driveEmail == null ? 'Connect Google Drive' : 'Reconnect Google Drive'),
                   ),
@@ -212,26 +288,73 @@ class _HomeScreenState extends State<HomeScreen> {
                     const Row(children: [Icon(Icons.verified, color: Colors.green), SizedBox(width: 8), Text('Payment verified by server')])
                   else
                     FilledButton(
-                      onPressed: _busy ? null : _startPayment,
+                      onPressed: _busy || _uploading ? null : _startPayment,
                       style: FilledButton.styleFrom(backgroundColor: burgundy),
                       child: const Text('Pay ₹290 securely'),
                     ),
                   if (_order != null) ...[
                     const SizedBox(height: 8),
                     Text('Order status: ${_order!['payment_status'] ?? 'pending'}'),
-                    if (_order!['upload_locked'] == true) const Text('This account has completed its video cycle.'),
+                    if (locked) const Text('This account has completed its video cycle.'),
                   ],
                 ]),
               )),
               const SizedBox(height: 12),
-              Card(child: const Padding(
-                padding: EdgeInsets.all(18),
+              Card(child: Padding(
+                padding: const EdgeInsets.all(18),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('3. Video upload and sharing', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                  SizedBox(height: 8),
-                  Text('The next app module will add large-file streaming upload, resumable transfer, and a private receiver link. Your phone original will never be deleted by the app.'),
+                  const Text('3. Upload your wedding video', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  const Text('Choose one video up to 15 GB. It goes directly to your own Google Drive. Your phone original is not deleted.'),
+                  const SizedBox(height: 12),
+                  if (videoReady)
+                    Text('Uploaded: ${_video!['original_filename']} (${_bytes(_video!['file_size_bytes'])})')
+                  else
+                    FilledButton.icon(
+                      onPressed: _busy || _uploading || !paid || locked || _driveEmail == null ? null : _chooseAndUpload,
+                      style: FilledButton.styleFrom(backgroundColor: burgundy),
+                      icon: const Icon(Icons.video_file),
+                      label: const Text('Choose video and upload'),
+                    ),
+                  if (_uploading) ...[
+                    const SizedBox(height: 14),
+                    LinearProgressIndicator(value: _uploadProgress),
+                    const SizedBox(height: 6),
+                    Text('${(_uploadProgress * 100).toStringAsFixed(1)}% uploaded'),
+                  ],
+                  if (!paid) const Text('Complete the ₹290 payment first.', style: TextStyle(color: Colors.black54)),
+                  if (paid && _driveEmail == null) const Text('Connect Google Drive before uploading.', style: TextStyle(color: Colors.black54)),
+                  if (locked) const Text('This account cannot upload another video.', style: TextStyle(color: Colors.black54)),
                 ]),
               )),
+              if (videoReady) ...[
+                const SizedBox(height: 12),
+                Card(child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('4. Share with your guests', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    const Text('Create a private download link. The account is locked only after the download service verifies the full video transfer.'),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _busy || _uploading ? null : _makeShareLink,
+                      icon: const Icon(Icons.link),
+                      label: const Text('Create / refresh private link'),
+                    ),
+                    if (_shareUrl != null) ...[
+                      const SizedBox(height: 8),
+                      SelectableText(_shareUrl!, style: const TextStyle(fontSize: 12)),
+                      const SizedBox(height: 8),
+                      FilledButton.icon(
+                        onPressed: _copyShareLink,
+                        icon: const Icon(Icons.copy),
+                        label: const Text('Copy guest link'),
+                        style: FilledButton.styleFrom(backgroundColor: burgundy),
+                      ),
+                    ],
+                  ]),
+                )),
+              ],
               if (_status != null) ...[
                 const SizedBox(height: 12),
                 Container(
