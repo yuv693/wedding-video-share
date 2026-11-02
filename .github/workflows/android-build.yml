@@ -53,7 +53,7 @@ jobs:
                   </intent-filter>
           '''
           if 'android:scheme="weddingvideoshare"' not in s:
-              s = s.replace("</activity>", intent + "\\n        </activity>")
+              s = s.replace("</activity>", intent + "\n        </activity>")
               p.write_text(s)
           PY
 
