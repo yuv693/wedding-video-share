@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
 
@@ -17,6 +18,11 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   void dispose() { _identity.dispose(); _otp.dispose(); super.dispose(); }
+
+  Future<void> _openLegal(String document) async {
+    final uri = Uri.parse('https://github.com/yuv693/wedding-video-share/blob/main/docs/$document');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
 
   String get _normalizedPhone {
     final value = _identity.text.trim().replaceAll(RegExp(r'[^0-9+]'), '');
@@ -143,8 +149,15 @@ class _AuthScreenState extends State<AuthScreen> {
                       _codeSent = false; _otp.clear(); _message = null;
                     }), child: const Text('Change email or phone number')),
                   const SizedBox(height: 20),
-                  const Text('By continuing, you agree to use Wedding Video Share responsibly.',
+                  const Text('By continuing, you agree to the service terms and privacy policy.',
                     textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.black45)),
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    children: [
+                      TextButton(onPressed: () => _openLegal('privacy-policy.md'), child: const Text('Privacy Policy')),
+                      TextButton(onPressed: () => _openLegal('terms-of-service.md'), child: const Text('Terms of Service')),
+                    ],
+                  ),
                 ],
               ),
             ),
