@@ -75,6 +75,7 @@ class VideoUploadService {
     var offset = (startData['resumeOffset'] as int?) ?? 0;
     var fileId = startData['completedFileId']?.toString() ?? '';
     if (offset < 0 || offset > file.size) throw Exception('The saved upload checkpoint is invalid.');
+    onProgress(offset / file.size);
 
     if (fileId.isEmpty) {
       final source = file.readStream;
