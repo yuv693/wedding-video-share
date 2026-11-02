@@ -1,7 +1,15 @@
-import 'package:flutter/material.dart';
+import 'dart:async';
 
-void main() {
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'screens/auth_screen.dart';
+import 'screens/home_screen.dart';
+import 'services/backend.dart';
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabasePublishableKey);
   runApp(const WeddingVideoShareApp());
 }
 
@@ -17,10 +25,7 @@ class WeddingVideoShareApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFFFFCF8),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: burgundy,
-          brightness: Brightness.light,
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: burgundy, brightness: Brightness.light),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFFFFFCF8),
           foregroundColor: burgundy,
@@ -28,105 +33,32 @@ class WeddingVideoShareApp extends StatelessWidget {
           centerTitle: false,
         ),
       ),
-      home: const WelcomeScreen(),
+      home: const AuthGate(),
     );
   }
 }
 
-class WelcomeScreen extends StatelessWidget {
-  const WelcomeScreen({super.key});
+class AuthGate extends StatefulWidget {
+  const AuthGate({super.key});
+  @override
+  State<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<AuthGate> {
+  StreamSubscription<AuthState>? _subscription;
+  bool _signedIn = supabase.auth.currentSession != null;
 
   @override
-  Widget build(BuildContext context) {
-    const burgundy = Color(0xFF6F2438);
-    const gold = Color(0xFFB28A4A);
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Wedding Video Share',
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 28),
-                  Container(
-                    height: 190,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF4EAE6),
-                      borderRadius: BorderRadius.circular(28),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.favorite, size: 76, color: burgundy),
-                    ),
-                  ),
-                  const SizedBox(height: 30),
-                  const Text(
-                    'Your wedding memories,\nbeautifully shared.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 29,
-                      height: 1.2,
-                      fontWeight: FontWeight.w800,
-                      color: burgundy,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Share your wedding video privately with family and friends. Your video is stored in your own Google Drive.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, height: 1.5),
-                  ),
-                  const SizedBox(height: 28),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: burgundy,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 17),
-                    ),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Account setup will be enabled after authentication integration.',
-                          ),
-                        ),
-                      );
-                    },
-                    child: const Text(
-                      'Get Started',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'One account • One wedding video • ₹290',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: gold,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'Maximum video size: 15 GB. Upload permission is locked only after the server verifies the receiver transfer.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: Colors.black54, height: 1.4),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+  void initState() {
+    super.initState();
+    _subscription = supabase.auth.onAuthStateChange.listen((state) {
+      if (mounted) setState(() => _signedIn = state.session != null);
+    });
   }
+
+  @override
+  void dispose() { _subscription?.cancel(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => _signedIn ? const HomeScreen() : const AuthScreen();
 }
