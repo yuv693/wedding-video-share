@@ -22,6 +22,12 @@ Flutter Android app for private wedding-video sharing.
 - Copyable private guest link and receiver download service.
 - GitHub Actions workflow builds a release Android App Bundle and an installable Android APK, and saves the generated Android project files and dependency lockfile into the repository. The current Android release build uses the debug signing key for development/testing only.
 
+## Legal drafts
+- [Privacy Policy](docs/privacy-policy.md)
+- [Terms of Service](docs/terms-of-service.md)
+
+These are draft documents. Add a monitored support contact, publish stable public URLs and obtain legal review before release.
+
 ## Still required before public launch
 - Configure the Supabase email template to include `{{ .Token }}` for numeric email OTP.
 - Enable phone authentication and configure a paid SMS provider in Supabase.
