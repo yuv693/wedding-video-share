@@ -19,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _razorpay = Razorpay();
   final _uploadService = VideoUploadService();
+  final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
   bool _busy = false, _uploading = false;
   double _uploadProgress = 0;
@@ -31,12 +32,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onPaymentSuccess);
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onPaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _onExternalWallet);
-    _linkSubscription = AppLinks().uriLinkStream.listen((uri) {
-      if (uri.scheme == 'weddingvideoshare' && uri.host == 'drive-connected' && mounted) {
-        setState(() => _status = 'Google Drive connected. Refreshing account details…');
-        _loadQuota();
-      }
-    });
+    _linkSubscription = _appLinks.uriLinkStream.listen(_handleIncomingLink);
+    _appLinks.getInitialLink().then(_handleIncomingLink).catchError((_) {});
     _refresh();
   }
 
@@ -45,6 +42,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _linkSubscription?.cancel();
     _razorpay.clear();
     super.dispose();
+  }
+
+  void _handleIncomingLink(Uri? uri) {
+    if (uri != null && uri.scheme == 'weddingvideoshare' && uri.host == 'drive-connected' && mounted) {
+      setState(() => _status = 'Google Drive connection returned to the app. Refreshing account details…');
+      _loadQuota();
+    }
   }
 
   Map<String, dynamic> _map(dynamic value) {
@@ -143,7 +147,20 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onPaymentSuccess(PaymentSuccessResponse response) {
     if (!mounted) return;
     setState(() => _status = 'Payment submitted. Waiting for secure server verification…');
-    Future<void>.delayed(const Duration(seconds: 2), _loadOrder);
+    unawaited(_pollPaymentVerification());
+  }
+
+  Future<void> _pollPaymentVerification() async {
+    for (var attempt = 0; attempt < 10; attempt++) {
+      await Future<void>.delayed(const Duration(seconds: 3));
+      if (!mounted) return;
+      await _loadOrder();
+      if (_order?['payment_status'] == 'paid') {
+        if (mounted) setState(() => _status = 'Payment verified. You can now upload your wedding video.');
+        return;
+      }
+    }
+    if (mounted) setState(() => _status = 'Payment is still being confirmed. Tap Refresh in a moment.');
   }
 
   void _onPaymentError(PaymentFailureResponse response) {
@@ -183,7 +200,10 @@ class _HomeScreenState extends State<HomeScreen> {
       });
       await _loadOrder();
     } catch (e) {
-      if (mounted) setState(() { _status = 'Upload: $e'; _uploading = false; });
+      if (mounted) {
+        setState(() { _status = 'Upload: $e'; _uploading = false; });
+        await _loadOrder();
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
