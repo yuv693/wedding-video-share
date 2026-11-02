@@ -51,9 +51,10 @@ int _acceptedOffset(String? range) {
 }
 
 class VideoUploadResult {
-  const VideoUploadResult({required this.shareUrl, required this.fileName});
+  const VideoUploadResult({required this.shareUrl, required this.fileName, required this.downloadPin});
   final String shareUrl;
   final String fileName;
+  final String downloadPin;
 }
 
 class VideoUploadService {
@@ -208,10 +209,11 @@ class VideoUploadService {
     });
     final shareData = _asMap(share.data);
     final shareUrl = shareData['shareUrl']?.toString();
-    if (share.status != 200 || shareData['ok'] != true || shareUrl == null) {
+    final downloadPin = shareData['downloadPin']?.toString();
+    if (share.status != 200 || shareData['ok'] != true || shareUrl == null || downloadPin == null) {
       throw Exception(shareData['error']?.toString() ?? 'Video uploaded, but the private share link could not be created.');
     }
-    return VideoUploadResult(shareUrl: shareUrl, fileName: file.name);
+    return VideoUploadResult(shareUrl: shareUrl, fileName: file.name, downloadPin: downloadPin);
   }
 
   Future<Map<String, dynamic>> _openOrResumeSession({
