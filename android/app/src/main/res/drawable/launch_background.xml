@@ -4,6 +4,5 @@
     <item
         android:drawable="@drawable/wedding_icon"
         android:gravity="center"
-        android:width="108dp"
-        android:height="108dp" />
+        />
 </layer-list>
