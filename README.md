@@ -20,7 +20,7 @@ Flutter Android app for private wedding-video sharing.
 - Saved Google Drive upload-session recovery when the customer reselects the same file.
 - Server-side file metadata/size verification before creating a private receiver link.
 - Copyable private guest link and receiver download service.
-- GitHub Actions workflow builds a release Android App Bundle and saves the generated Android project files into the repository.
+- GitHub Actions workflow builds a release Android App Bundle and an installable Android APK, and saves the generated Android project files and dependency lockfile into the repository. The current Android release build uses the debug signing key for development/testing only.
 
 ## Still required before public launch
 - Configure the Supabase email template to include `{{ .Token }}` for numeric email OTP.
@@ -33,7 +33,7 @@ Flutter Android app for private wedding-video sharing.
 The app's client-side payment callback is never treated as proof of payment; the server webhook is authoritative. The receiver download service verifies that the expected number of bytes reached end-of-stream at the server. It does not prove the receiver device saved the file to disk and does not verify a checksum.
 
 ## Build
-GitHub Actions creates the Android platform folder if absent, configures compile SDK 36 and the Google Drive return link, commits the generated Android project files, then runs `flutter pub get` and `flutter build appbundle --release`. A successful AAB is uploaded as a workflow artifact.
+GitHub Actions creates the Android platform folder if absent, configures compile SDK 36 and the Google Drive return link, commits the generated Android project files, then runs `flutter pub get` and `flutter build appbundle --release`. A successful AAB and APK are uploaded as separate workflow artifacts.
 
 ## Security
 Never commit Supabase service-role keys, Google OAuth client secrets, Google token-encryption keys, Razorpay secrets, or Android signing keystores. Configure secrets only in provider dashboards or GitHub Actions secrets.
