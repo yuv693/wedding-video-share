@@ -42,12 +42,18 @@ class _AuthScreenState extends State<AuthScreen> {
       if (_usePhone) {
         await supabase.auth.signInWithOtp(phone: _normalizedPhone, shouldCreateUser: true);
       } else {
-        await supabase.auth.signInWithOtp(email: value, shouldCreateUser: true);
+        await supabase.auth.signInWithOtp(
+          email: value,
+          shouldCreateUser: true,
+          emailRedirectTo: 'weddingvideoshare://login-callback',
+        );
       }
       if (!mounted) return;
       setState(() {
         _codeSent = true;
-        _message = 'Verification code sent. Please check your ${_usePhone ? 'SMS' : 'email'}.';
+        _message = _usePhone
+            ? 'Verification code sent by SMS. Enter the code below.'
+            : 'Login link sent. Open it from your email on this phone. If your email contains a code instead, enter it below.';
       });
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
