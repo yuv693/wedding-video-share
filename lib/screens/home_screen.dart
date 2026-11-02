@@ -256,6 +256,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final paid = _order?['payment_status'] == 'paid';
     final locked = _order?['upload_locked'] == true;
     final videoReady = _video?['upload_status'] == 'uploaded';
+    final videoSlotUsed = _video != null;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Wedding Video Share', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -335,6 +336,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 12),
                   if (videoReady)
                     Text('Uploaded: ${_video!['original_filename']} (${_bytes(_video!['file_size_bytes'])})')
+                  else if (videoSlotUsed)
+                    const Text('This account has already used its one video slot. Create a new account for another wedding video.')
                   else
                     FilledButton.icon(
                       onPressed: _busy || _uploading || !paid || locked || _driveEmail == null ? null : _chooseAndUpload,
