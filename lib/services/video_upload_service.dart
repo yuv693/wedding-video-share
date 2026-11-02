@@ -153,7 +153,7 @@ class VideoUploadService {
           final range = response.headers['range'];
           var accepted = offset;
           if (range != null) {
-            final match = RegExp(r'bytes=0-(\\d+)').firstMatch(range);
+            final match = RegExp(r'bytes=0-(\d+)').firstMatch(range);
             if (match == null) throw Exception('Google Drive returned an invalid upload checkpoint.');
             accepted = int.parse(match.group(1)!) + 1;
           }
