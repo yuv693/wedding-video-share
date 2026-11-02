@@ -106,7 +106,7 @@ jobs:
           storePassword=$ANDROID_STORE_PASSWORD
           keyPassword=$ANDROID_KEY_PASSWORD
           keyAlias=$ANDROID_KEY_ALIAS
-          storeFile=app/upload-keystore.jks
+          storeFile=upload-keystore.jks
           EOF
             echo "Play Store release signing configured."
           else
