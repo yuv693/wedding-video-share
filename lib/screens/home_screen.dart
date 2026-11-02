@@ -23,7 +23,7 @@ class _HomeScreenState extends State<HomeScreen> {
   StreamSubscription<Uri>? _linkSubscription;
   bool _busy = false, _uploading = false;
   double _uploadProgress = 0;
-  String? _status, _driveEmail, _shareUrl;
+  String? _status, _driveEmail, _shareUrl, _sharePin;
   Map<String, dynamic>? _order, _quota, _video;
 
   @override
@@ -201,6 +201,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       setState(() {
         _shareUrl = upload.shareUrl;
+        _sharePin = upload.downloadPin;
         _status = 'Video uploaded and verified. Your private receiver link is ready.';
         _uploading = false;
       });
@@ -228,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (response.status != 200 || data['ok'] != true || url == null) {
         throw Exception(data['error']?.toString() ?? 'Could not create the private link.');
       }
-      if (mounted) setState(() { _shareUrl = url; _status = 'A new private receiver link has been created.'; });
+      if (mounted) setState(() { _shareUrl = url; _sharePin = data['downloadPin']?.toString(); _status = 'Private link and 6-digit download password are ready. Send them separately.'; });
     } catch (e) {
       if (mounted) setState(() => _status = 'Share link: $e');
     } finally {
@@ -244,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _copyShareLink() async {
     if (_shareUrl == null) return;
     await Clipboard.setData(ClipboardData(text: _shareUrl!));
-    if (mounted) setState(() => _status = 'Private link copied. Send it only to your wedding guests.');
+    if (mounted) setState(() => _status = 'Private link copied. Send the password separately.');
   }
 
   String _bytes(dynamic value) {
@@ -377,7 +378,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     if (_shareUrl != null) ...[
                       const SizedBox(height: 8),
+                      const Text('Private receiver link', style: TextStyle(fontWeight: FontWeight.w700)),
                       SelectableText(_shareUrl!, style: const TextStyle(fontSize: 12)),
+                      const SizedBox(height: 12),
+                      if (_sharePin != null) ...[
+                        const Text('6-digit download password', style: TextStyle(fontWeight: FontWeight.w700)),
+                        SelectableText(_sharePin!, style: const TextStyle(fontSize: 26, letterSpacing: 5, fontWeight: FontWeight.w800, color: burgundy)),
+                        const Text('Send this password separately from the link.', style: TextStyle(color: Colors.black54, fontSize: 12)),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(onPressed: () async { await Clipboard.setData(ClipboardData(text: _sharePin!)); if (mounted) setState(() => _status = 'Download password copied.'); }, icon: const Icon(Icons.password), label: const Text('Copy password')),
+                      ],
                       const SizedBox(height: 8),
                       FilledButton.icon(
                         onPressed: _copyShareLink,
