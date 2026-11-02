@@ -81,6 +81,7 @@ jobs:
       - name: Save generated Android project files to repository
         run: |
           git add android pubspec.lock
+          git add -f android/gradlew android/gradlew.bat android/gradle/wrapper/gradle-wrapper.jar
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
