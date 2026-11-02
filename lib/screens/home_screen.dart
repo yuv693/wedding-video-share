@@ -262,7 +262,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Wedding Video Share', style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
           IconButton(onPressed: _busy || _uploading ? null : _refresh, icon: const Icon(Icons.refresh), tooltip: 'Refresh'),
-          IconButton(onPressed: () => supabase.auth.signOut(), icon: const Icon(Icons.logout), tooltip: 'Sign out'),
+          IconButton(onPressed: _busy || _uploading ? null : () => supabase.auth.signOut(), icon: const Icon(Icons.logout), tooltip: 'Sign out'),
         ],
       ),
       body: SafeArea(
