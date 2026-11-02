@@ -22,6 +22,9 @@ Flutter Android app for private wedding-video sharing.
 - Copyable private guest link and receiver download service.
 - GitHub Actions workflow builds a release Android App Bundle and an installable Android APK, and saves the generated Android project files and dependency lockfile into the repository. The current Android release build uses the debug signing key for development/testing only.
 
+## Launch checklist
+- [Provider setup and Play Store launch checklist](docs/LAUNCH_SETUP.md)
+
 ## Legal drafts
 - [Privacy Policy](docs/privacy-policy.md)
 - [Terms of Service](docs/terms-of-service.md)
