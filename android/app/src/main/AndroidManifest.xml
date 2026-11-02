@@ -2,7 +2,7 @@
     <application
         android:label="Wedding Video Share"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@drawable/wedding_icon">
         <activity
             android:name=".MainActivity"
             android:exported="true"
