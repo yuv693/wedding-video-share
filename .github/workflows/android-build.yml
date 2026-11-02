@@ -76,7 +76,7 @@ jobs:
 
       - name: Save generated Android project files to repository
         run: |
-          git add android
+          git add android pubspec.lock
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
