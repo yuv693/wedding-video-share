@@ -36,6 +36,9 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Analyze Dart and Flutter code
+        run: flutter analyze --no-pub
+
       - name: Create Android platform files if missing
         run: |
           if [ ! -f android/gradlew ]; then
