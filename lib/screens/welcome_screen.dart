@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 class WelcomeScreen extends StatelessWidget {
@@ -14,186 +16,211 @@ class WelcomeScreen extends StatelessWidget {
   final bool busy;
   final String? error;
 
-  static const burgundy = Color(0xFF6F2438);
-  static const gold = Color(0xFFC49A54);
-  static const ivory = Color(0xFFFFFCF8);
-  static const muted = Color(0xFF77696B);
+  static const burgundy = Color(0xFF70243B);
+  static const ivory = Color(0xFFFFF8EC);
+  static const muted = Color(0xFF6F5C59);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: ivory,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(22, 20, 22, 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        height: 42,
-                        width: 42,
-                        decoration: const BoxDecoration(color: burgundy, shape: BoxShape.circle),
-                        child: const Icon(Icons.favorite_rounded, color: Colors.white),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'WEDDING VIDEO SHARE',
-                        style: TextStyle(color: burgundy, fontSize: 13, letterSpacing: 1.3, fontWeight: FontWeight.w800),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 26),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF4EAE6),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(color: const Color(0xFFE8D8D0)),
-                    ),
-                    child: Column(
-                      children: [
-                        Container(
-                          height: 116,
-                          width: 116,
-                          decoration: BoxDecoration(
-                            color: ivory,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: gold, width: 1.5),
-                            boxShadow: const [BoxShadow(color: Color(0x1A6F2438), blurRadius: 18, offset: Offset(0, 7))],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          const _CelebrationBackdrop(),
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final cardWidth = constraints.maxWidth.clamp(280.0, 420.0);
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 28),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight - 56),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: cardWidth,
+                            constraints: const BoxConstraints(minHeight: 440, maxHeight: 560),
+                            padding: const EdgeInsets.fromLTRB(26, 44, 26, 34),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.96),
+                              border: Border.all(color: burgundy, width: 1.4),
+                              boxShadow: const [
+                                BoxShadow(color: Color(0x226F2438), blurRadius: 32, offset: Offset(0, 16)),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const SizedBox(height: 8),
+                                Column(
+                                  children: [
+                                    Container(
+                                      height: 76,
+                                      width: 76,
+                                      decoration: const BoxDecoration(
+                                        color: burgundy,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: const Text(
+                                        'WVS',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontFamily: 'Georgia',
+                                          fontSize: 19,
+                                          letterSpacing: 0.4,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    const Text(
+                                      'Celebrate. Share. Cherish.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: burgundy,
+                                        fontFamily: 'Georgia',
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                Column(
+                                  children: [
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: FilledButton(
+                                        onPressed: busy ? null : onGetStarted,
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: burgundy,
+                                          foregroundColor: Colors.white,
+                                          disabledBackgroundColor: burgundy.withValues(alpha: 0.55),
+                                          padding: const EdgeInsets.symmetric(vertical: 17),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(9),
+                                          ),
+                                          textStyle: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        child: busy
+                                            ? const SizedBox(
+                                                height: 19,
+                                                width: 19,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.white,
+                                                ),
+                                              )
+                                            : const Text('Get Started'),
+                                      ),
+                                    ),
+                                    if (error != null) ...[
+                                      const SizedBox(height: 14),
+                                      Text(
+                                        error!,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
-                          child: const Icon(Icons.volunteer_activism_rounded, color: burgundy, size: 54),
-                        ),
-                        const SizedBox(height: 22),
-                        const Text(
-                          'Celebrate. Share. Cherish.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: burgundy, fontSize: 12, letterSpacing: 1.3, fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'A welcome that feels\nlike a celebration',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: burgundy, fontSize: 29, height: 1.12, fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'One clear invitation. No setup anxiety, no clutter.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: muted, fontSize: 15, height: 1.45),
-                        ),
-                        const SizedBox(height: 20),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 11),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(30)),
-                          child: const Text(
-                            '₹290  •  One-Wedding Plan',
-                            style: TextStyle(color: burgundy, fontWeight: FontWeight.w800, fontSize: 14),
+                          if (onRecoverAccount != null) ...[
+                            const SizedBox(height: 20),
+                            TextButton(
+                              onPressed: busy ? null : onRecoverAccount,
+                              style: TextButton.styleFrom(foregroundColor: burgundy),
+                              child: const Text('Already have an account? Recover it'),
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          const Text(
+                            'One wedding. One beautiful way to share.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: muted,
+                              fontSize: 12,
+                              letterSpacing: 0.35,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text('One video up to 15 GB · Your own Google Drive', textAlign: TextAlign.center,
-                          style: TextStyle(color: muted, fontSize: 12)),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 22),
-                  const _WelcomeStep(
-                    icon: Icons.person_outline_rounded,
-                    title: 'Start your customer account',
-                    detail: 'A simple account setup with email recovery.',
-                  ),
-                  const SizedBox(height: 13),
-                  const _WelcomeStep(
-                    icon: Icons.cloud_outlined,
-                    title: 'Connect your Google Drive',
-                    detail: 'Your wedding video is saved in your own Drive storage.',
-                  ),
-                  const SizedBox(height: 13),
-                  const _WelcomeStep(
-                    icon: Icons.video_file_outlined,
-                    title: 'Upload first, pay when you share',
-                    detail: 'Upload one video up to 15 GB for free. Pay ₹290 only when you create your private share link.',
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: busy ? null : onGetStarted,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: burgundy,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                    ),
-                    child: busy
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('Get Started'),
-                  ),
-                  if (onRecoverAccount != null) ...[
-                    const SizedBox(height: 9),
-                    TextButton(
-                      onPressed: busy ? null : onRecoverAccount,
-                      child: const Text('Already have an account? Recover it'),
-                    ),
-                  ],
-                  if (error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
-                  ],
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Your Google Drive copy remains there until you choose to delete it.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: muted, fontSize: 12, height: 1.4),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
-class _WelcomeStep extends StatelessWidget {
-  const _WelcomeStep({required this.icon, required this.title, required this.detail});
-
-  final IconData icon;
-  final String title;
-  final String detail;
+class _CelebrationBackdrop extends StatelessWidget {
+  const _CelebrationBackdrop();
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
+      fit: StackFit.expand,
       children: [
-        Container(
-          height: 42,
-          width: 42,
+        const DecoratedBox(
           decoration: BoxDecoration(
-            color: const Color(0xFF6F2438).withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(13),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFF7E8D2),
+                Color(0xFFE8D0B5),
+                Color(0xFFF8EBDD),
+                Color(0xFFD8BDA6),
+              ],
+            ),
           ),
-          child: Icon(icon, color: const Color(0xFF6F2438)),
         ),
-        const SizedBox(width: 13),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(color: Color(0xFF3B2C31), fontWeight: FontWeight.w800, fontSize: 15)),
-              const SizedBox(height: 3),
-              Text(detail, style: const TextStyle(color: Color(0xFF77696B), fontSize: 13, height: 1.4)),
-            ],
+        Positioned(top: -70, right: -30, child: _bokeh(230, const Color(0xFFFFF5D8))),
+        Positioned(bottom: 70, left: -65, child: _bokeh(210, const Color(0xFFB98762))),
+        Positioned(top: 180, left: -45, child: _bokeh(140, const Color(0xFFFFF9E9))),
+        Positioned(bottom: -80, right: -35, child: _bokeh(240, const Color(0xFFB77E64))),
+        Positioned.fill(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Container(color: const Color(0x55FFF4E6)),
+          ),
+        ),
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.white.withValues(alpha: 0.12),
+                  const Color(0x33A66E55),
+                ],
+              ),
+            ),
           ),
         ),
       ],
     );
   }
+
+  Widget _bokeh(double size, Color color) => Container(
+        height: size,
+        width: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: color.withValues(alpha: 0.55),
+          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 40)],
+        ),
+      );
 }
