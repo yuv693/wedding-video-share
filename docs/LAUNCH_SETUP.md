@@ -12,7 +12,7 @@ In Supabase Dashboard:
 3. Enable the Email provider.
 4. In Authentication → Email Templates → Email Change, use {{ .Token }} so the account-linking screen receives a six-digit email-change code. In Authentication → Email Templates → Magic Link, also use {{ .Token }} so account recovery sends a six-digit sign-in code. Templates that send only {{ .ConfirmationURL }} send links instead of the codes expected by these screens.
 5. Configure production SMTP and test delivery, spam-folder handling, resend limits and OTP expiry.
-6. Test Get Started → Account → Protect your account → verify email → pay → reinstall on a test device → Recover account. Confirm the original order and video remain.
+6. Test Get Started → Account → Protect your account → verify email → connect Google Drive → upload one video → Share Video – Pay ₹290 → reinstall on a test device → Recover account. Confirm the original order and video remain.
 
 Do not let customers upload or pay until a recovery email is verified. Phone-only recovery is not enabled in this app build.
 
