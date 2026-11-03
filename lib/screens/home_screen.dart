@@ -165,8 +165,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _startPayment() async {
+    if (_video?['upload_status'] != 'uploaded' || _order == null) {
+      setState(() => _status = 'Upload your wedding video first. Payment is needed when you share it.');
+      return;
+    }
     if (supabase.auth.currentUser?.emailConfirmedAt == null) {
-      setState(() { _selectedTab = 2; _status = 'Verify your recovery email before paying so you can recover this customer account later.'; });
+      setState(() { _selectedTab = 2; _status = 'Verify your recovery email before payment so you can recover this customer account later.'; });
       return;
     }
     setState(() { _busy = true; _status = null; });
@@ -211,7 +215,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       await _loadOrder();
       if (_order?['payment_status'] == 'paid') {
-        if (mounted) setState(() => _status = 'Payment verified. You can now upload your wedding video.');
+        if (mounted) setState(() => _status = 'Payment verified. Creating your private share link…');
+        await _makeShareLink();
         return;
       }
     }
@@ -227,9 +232,25 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _chooseAndUpload() async {
-    if (_order == null || _order!['payment_status'] != 'paid' || _order!['upload_locked'] == true) return;
+    if (supabase.auth.currentUser?.emailConfirmedAt == null) {
+      setState(() { _selectedTab = 2; _status = 'Verify your recovery email before uploading so your account can be recovered later.'; });
+      return;
+    }
+    if (_order?['upload_locked'] == true || _video != null) {
+      setState(() => _status = 'This account has already used its one video slot. Create a new account for another wedding.');
+      return;
+    }
     setState(() { _busy = true; _status = null; _uploadProgress = 0; });
     try {
+      if (_order == null) {
+        final prepared = await supabase.functions.invoke('razorpay-payments', body: {'action': 'prepare_upload'});
+        final preparedData = _map(prepared.data);
+        if (prepared.status != 200 || preparedData['ok'] != true) {
+          throw Exception(preparedData['note']?.toString() ?? preparedData['error']?.toString() ?? 'Could not prepare your upload.');
+        }
+        await _loadOrder();
+      }
+      if (_order == null) throw Exception('Your wedding upload could not be prepared. Please refresh and try again.');
       final result = await FilePicker.platform.pickFiles(
         type: FileType.video,
         allowMultiple: false,
@@ -249,9 +270,9 @@ class _HomeScreenState extends State<HomeScreen> {
       );
       if (!mounted) return;
       setState(() {
-        _shareUrl = upload.shareUrl;
-        _sharePin = upload.downloadPin;
-        _status = 'Video uploaded and verified. Your private receiver link is ready.';
+        _shareUrl = null;
+        _sharePin = null;
+        _status = 'Video uploaded successfully. Pay ₹290 when you are ready to share it.';
         _uploading = false;
       });
       await _loadOrder();
@@ -266,7 +287,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _makeShareLink() async {
-    if (_order == null) return;
+    if (_order == null || _video?['upload_status'] != 'uploaded') return;
+    if (_order?['payment_status'] != 'paid') {
+      await _startPayment();
+      return;
+    }
     setState(() { _busy = true; _status = null; });
     try {
       final response = await supabase.functions.invoke('wedding-share', body: {
@@ -428,7 +453,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Protect your account with a verified email before payment.'),
+                        const Text('Verify your recovery email before uploading.'),
                         const SizedBox(height: 8),
                         OutlinedButton(
                           onPressed: () => setState(() => _selectedTab = 2),
@@ -437,11 +462,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     )
                   else
-                    FilledButton(
-                      onPressed: _busy || _uploading ? null : _startPayment,
-                      style: FilledButton.styleFrom(backgroundColor: burgundy),
-                      child: const Text('Pay ₹290 securely'),
-                    ),
+                    const Text('Upload your wedding video first. Pay ₹290 only when you are ready to share it.'),
                   if (_order != null) ...[
                     const SizedBox(height: 8),
                     Text('Order status: ${_order!['payment_status'] ?? 'pending'}'),
@@ -510,15 +531,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
                   padding: const EdgeInsets.all(18),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('A private link, ready to send.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                    const Text('Your video is uploaded.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
-                    const Text('Create a private download link and send the 6-digit password separately. Your Google Drive copy stays saved until you choose to delete it.'),
+                    const Text('Pay ₹290 to unlock private sharing. After the payment is verified, your private link and 6-digit PIN will appear here. Your Google Drive copy stays saved until you choose to delete it.'),
                     const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: _busy || _uploading ? null : _makeShareLink,
-                      icon: const Icon(Icons.link),
-                      label: const Text('Create / refresh private link'),
-                    ),
+                    if (!paid)
+                      FilledButton.icon(
+                        onPressed: _busy || _uploading ? null : _startPayment,
+                        icon: const Icon(Icons.lock_open_rounded),
+                        label: const Text('Share Video – Pay ₹290'),
+                        style: FilledButton.styleFrom(backgroundColor: burgundy),
+                      )
+                    else
+                      OutlinedButton.icon(
+                        onPressed: _busy || _uploading ? null : _makeShareLink,
+                        icon: const Icon(Icons.link),
+                        label: const Text('Create / refresh private link'),
+                      ),
                     if (_shareUrl != null) ...[
                       const SizedBox(height: 8),
                       const Text('Private receiver link', style: TextStyle(fontWeight: FontWeight.w700)),
