@@ -8,6 +8,7 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
+import '../widgets/account_access_card.dart';
 import '../services/video_upload_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -138,6 +139,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _startPayment() async {
+    if (supabase.auth.currentUser?.emailConfirmedAt == null) {
+      setState(() { _selectedTab = 2; _status = 'Verify your recovery email before paying so you can recover this customer account later.'; });
+      return;
+    }
     setState(() { _busy = true; _status = null; });
     try {
       final response = await supabase.functions.invoke('razorpay-payments', body: {'action': 'create_order'});
@@ -332,6 +337,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const burgundy = Color(0xFF6F2438);
     final user = supabase.auth.currentUser;
     final paid = _order?['payment_status'] == 'paid';
+    final accountProtected = supabase.auth.currentUser?.emailConfirmedAt != null;
     final locked = _order?['upload_locked'] == true;
     final videoReady = _video?['upload_status'] == 'uploaded';
     final videoDeleted = _video?['upload_status'] == 'deleted';
@@ -392,6 +398,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 12),
                   if (paid)
                     const Row(children: [Icon(Icons.verified, color: Colors.green), SizedBox(width: 8), Text('Payment verified by server')])
+                  else if (!accountProtected)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Protect your account with a verified email before payment.'),
+                        const SizedBox(height: 8),
+                        OutlinedButton(
+                          onPressed: () => setState(() => _selectedTab = 2),
+                          child: const Text('Verify recovery email'),
+                        ),
+                      ],
+                    )
                   else
                     FilledButton(
                       onPressed: _busy || _uploading ? null : _startPayment,
@@ -524,6 +542,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
               ],
               if (_selectedTab == 2) ...[
+              const SizedBox(height: 12),
+              AccountAccessCard(onLinked: _refresh),
               const SizedBox(height: 12),
               Card(
                 color: Colors.white,
