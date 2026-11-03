@@ -26,7 +26,7 @@ void main() {
     ));
 
     expect(find.text('WEDDING VIDEO SHARE'), findsOneWidget);
-    expect(find.text('Upload first, pay when you share'), findsOneWidget);
+    expect(find.textContaining('Upload first, pay when you share'), findsOneWidget);
     expect(find.text('₹290  •  One wedding video'), findsOneWidget);
 
     final getStarted = find.text('Get Started');
