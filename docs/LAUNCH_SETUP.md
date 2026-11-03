@@ -19,7 +19,8 @@ Do not let customers pay until a recovery email is verified. Phone-only recovery
 ## 2. Google Drive OAuth and encryption
 
 This is separate from customer account recovery. It grants access to the customer's chosen Drive.
-1. Enable the Google Drive API in Google Cloud Console.
+1. In Supabase Dashboard → Project Settings → API Keys → Legacy API keys, copy the legacy service_role key and save it as SUPABASE_SERVICE_ROLE_KEY under Project Settings → Edge Functions → Secrets. Do not paste this key into chat or GitHub. The OAuth state RPC and other server-only RPC calls require this legacy service-role JWT; the current logs show the newer sb_secret fallback being used and PostgREST returning PGRST202.
+2. Enable the Google Drive API in Google Cloud Console.
 2. Set the Drive OAuth web client redirect URI to:
 https://mnaswhizatnwfwmjmtvm.supabase.co/functions/v1/google-drive-oauth
 3. Before real customers connect Drive, replace GOOGLE_TOKEN_ENCRYPTION_KEY in Supabase Edge Function Secrets with a fresh cryptographically random 32-byte base64 value. Do not reuse the old key or share it in chat.
