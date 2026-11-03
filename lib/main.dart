@@ -69,6 +69,14 @@ class _AuthGateState extends State<AuthGate> {
         if (_signedIn) _recovering = false;
       });
     });
+    // Existing customers who already have an anonymous app session also get
+    // the combined Google + Drive step after this app update, but only when
+    // the server says no Drive account is connected yet.
+    if (supabase.auth.currentSession != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_connectDriveForExistingCustomer());
+      });
+    }
   }
 
   @override
@@ -77,35 +85,53 @@ class _AuthGateState extends State<AuthGate> {
     super.dispose();
   }
 
+  Future<void> _startGoogleDriveConsent() async {
+    // The authenticated app customer is bound to a one-time OAuth state on
+    // the server. Google then confirms the account and grants drive.file.
+    final response = await supabase.functions.invoke(
+      'google-drive-oauth',
+      body: {'action': 'start'},
+    );
+    final data = response.data is Map
+        ? Map<String, dynamic>.from(response.data as Map)
+        : <String, dynamic>{};
+    final authorizationUrl = data['authorizationUrl']?.toString();
+    if (response.status != 200 || data['ok'] != true || authorizationUrl == null) {
+      throw Exception(data['error']?.toString() ??
+          'Google confirmation is not configured yet. Please try again later.');
+    }
+    final opened = await launchUrl(
+      Uri.parse(authorizationUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened) throw Exception('Could not open Google confirmation.');
+  }
+
+  Future<void> _connectDriveForExistingCustomer() async {
+    try {
+      final quota = await supabase.functions.invoke(
+        'google-drive-storage',
+        body: {'action': 'quota'},
+      );
+      final data = quota.data is Map
+          ? Map<String, dynamic>.from(quota.data as Map)
+          : <String, dynamic>{};
+      if (quota.status == 200 && data['ok'] == true && data['email'] != null) return;
+      await _startGoogleDriveConsent();
+    } catch (e) {
+      // Keep the customer on the home screen if the Drive provider is not
+      // configured. The existing Connect Google Drive action remains available.
+      debugPrint('Automatic Google Drive connection could not start: $e');
+    }
+  }
+
   Future<void> _getStarted() async {
     setState(() { _starting = true; _error = null; });
     try {
       if (supabase.auth.currentSession == null) {
         await supabase.auth.signInAnonymously();
       }
-
-      // Start the existing secure Google OAuth flow immediately after
-      // creating/restoring the private customer session. The server binds
-      // OAuth state to this authenticated customer and stores Drive tokens
-      // encrypted; the app never receives a Google refresh token.
-      final response = await supabase.functions.invoke(
-        'google-drive-oauth',
-        body: {'action': 'start'},
-      );
-      final data = response.data is Map
-          ? Map<String, dynamic>.from(response.data as Map)
-          : <String, dynamic>{};
-      final authorizationUrl = data['authorizationUrl']?.toString();
-      if (response.status != 200 || data['ok'] != true || authorizationUrl == null) {
-        throw Exception(data['error']?.toString() ??
-            'Google confirmation is not configured yet. Please try again later.');
-      }
-      final opened = await launchUrl(
-        Uri.parse(authorizationUrl),
-        mode: LaunchMode.externalApplication,
-      );
-      if (!opened) throw Exception('Could not open Google confirmation.');
-
+      await _startGoogleDriveConsent();
       if (mounted) setState(() => _signedIn = true);
     } on AuthException catch (e) {
       if (mounted) setState(() => _error =
