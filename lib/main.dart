@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/auth_screen.dart';
+import 'screens/welcome_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/backend.dart';
 
@@ -44,8 +45,8 @@ class WeddingVideoShareApp extends StatelessWidget {
   }
 }
 
-/// Opens sign-in immediately for signed-out customers.
-/// After Supabase confirms a session, the customer dashboard is shown.
+/// Shows the welcome page to signed-out visitors; Google account sign-in
+/// creates the customer identity used for payment and Drive ownership.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -76,6 +77,10 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (_signedIn) return const HomeScreen();
-    return const AuthScreen();
+    return WelcomeScreen(onGetStarted: () {
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+      );
+    });
   }
 }
