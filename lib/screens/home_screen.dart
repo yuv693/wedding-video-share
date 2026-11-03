@@ -508,7 +508,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const Text('This account has already used its one video slot. Create a new account for another wedding video.')
                   else
                     FilledButton.icon(
-                      onPressed: _busy || _uploading || !paid || locked || _driveEmail == null ? null : _chooseAndUpload,
+                      onPressed: _busy || _uploading || locked || _driveEmail == null ? null : _chooseAndUpload,
                       style: FilledButton.styleFrom(backgroundColor: burgundy),
                       icon: const Icon(Icons.video_file),
                       label: const Text('Choose video and upload'),
@@ -522,7 +522,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     Text('${(_uploadProgress * 100).toStringAsFixed(1)}% uploaded · resumable 8 MB chunks'),
                   ],
                   if (!paid) const Text('Payment is needed only when you share your uploaded video.', style: TextStyle(color: Colors.black54)),
-                  if (paid && _driveEmail == null) const Text('Connect Google Drive before uploading.', style: TextStyle(color: Colors.black54)),
+                  if (_driveEmail == null) const Text('Connect Google Drive before uploading.', style: TextStyle(color: Colors.black54)),
                   if (locked) const Text('This account cannot upload another video.', style: TextStyle(color: Colors.black54)),
                 ]),
               )),
