@@ -9,9 +9,14 @@ void main() {
     expect(uploadChunkBytes, 8 * 1024 * 1024);
   });
 
-  testWidgets('welcome screen follows approved Canva welcome copy and account actions', (tester) async {
+  testWidgets('welcome screen matches approved Canva WVS welcome mockup and actions', (tester) async {
     var started = false;
     var recovering = false;
+
+    await tester.view.setPhysicalSize(const Size(432, 900));
+    await tester.view.setDevicePixelRatio(1);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(MaterialApp(
       home: WelcomeScreen(
@@ -20,42 +25,30 @@ void main() {
       ),
     ));
 
-    expect(find.text('WEDDING VIDEO SHARE'), findsOneWidget);
+    expect(find.text('WVS'), findsOneWidget);
     expect(find.text('Celebrate. Share. Cherish.'), findsOneWidget);
-    expect(find.textContaining('A welcome that feels'), findsOneWidget);
-    expect(find.text('One clear invitation. No setup anxiety, no clutter.'), findsOneWidget);
-    expect(find.text('₹290  •  One-Wedding Plan'), findsOneWidget);
-    expect(find.textContaining('Upload first, pay when you share'), findsOneWidget);
+    expect(find.text('Get Started'), findsOneWidget);
+    expect(find.text('One wedding. One beautiful way to share.'), findsOneWidget);
 
-    final getStarted = find.text('Get Started');
-    await tester.ensureVisible(getStarted);
-    await tester.tap(getStarted);
+    await tester.tap(find.text('Get Started'));
     expect(started, isTrue);
 
-    final recover = find.text('Already have an account? Recover it');
-    await tester.ensureVisible(recover);
-    await tester.tap(recover);
+    await tester.tap(find.text('Already have an account? Recover it'));
     expect(recovering, isTrue);
   });
 
   testWidgets('welcome actions are disabled while account setup is busy', (tester) async {
-    var started = false;
-    var recovering = false;
-
     await tester.pumpWidget(MaterialApp(
       home: WelcomeScreen(
-        onGetStarted: () => started = true,
-        onRecoverAccount: () => recovering = true,
+        onGetStarted: () {},
+        onRecoverAccount: () {},
         busy: true,
       ),
     ));
 
-    final buttons = tester.widgetList<Widget>(find.byType(FilledButton));
-    expect(buttons.length, 1);
-    expect((buttons.single as FilledButton).onPressed, isNull);
+    final button = tester.widget<FilledButton>(find.byType(FilledButton));
+    expect(button.onPressed, isNull);
     final recover = tester.widget<TextButton>(find.byType(TextButton));
     expect(recover.onPressed, isNull);
-    expect(started, isFalse);
-    expect(recovering, isFalse);
   });
 }
