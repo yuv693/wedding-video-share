@@ -55,6 +55,25 @@ class _AccountAccessCardState extends State<AccountAccessCard> {
     }
   }
 
+  Future<void> _resendCode() async {
+    final email = _email.text.trim().toLowerCase();
+    setState(() { _busy = true; _message = null; _error = false; });
+    try {
+      if (_signingBackIn) {
+        await supabase.auth.signInWithOtp(email: email, shouldCreateUser: false);
+      } else {
+        await supabase.auth.resend(email: email, type: OtpType.emailChange);
+      }
+      if (mounted) setState(() => _message = 'A new verification code has been requested.');
+    } on AuthException catch (e) {
+      if (mounted) setState(() { _message = e.message; _error = true; });
+    } catch (_) {
+      if (mounted) setState(() { _message = 'Could not resend the code. Please try again.'; _error = true; });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _verifyCode() async {
     final email = _email.text.trim().toLowerCase();
     final code = _otp.text.trim();
@@ -171,7 +190,7 @@ class _AccountAccessCardState extends State<AccountAccessCard> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: TextButton(
-                    onPressed: _busy ? null : _sendCode,
+                    onPressed: _busy ? null : _resendCode,
                     child: const Text('Resend code'),
                   ),
                 ),
