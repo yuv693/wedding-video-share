@@ -9,10 +9,9 @@ void main() {
     expect(uploadChunkBytes, 8 * 1024 * 1024);
   });
 
-  testWidgets('welcome screen starts and recovers customer accounts', (tester) async {
+  testWidgets('welcome screen follows approved Canva welcome copy and account actions', (tester) async {
     var started = false;
     var recovering = false;
-
 
     await tester.pumpWidget(MaterialApp(
       home: WelcomeScreen(
@@ -22,8 +21,11 @@ void main() {
     ));
 
     expect(find.text('WEDDING VIDEO SHARE'), findsOneWidget);
+    expect(find.text('Celebrate. Share. Cherish.'), findsOneWidget);
+    expect(find.textContaining('A welcome that feels'), findsOneWidget);
+    expect(find.text('One clear invitation. No setup anxiety, no clutter.'), findsOneWidget);
+    expect(find.text('₹290  •  One-Wedding Plan'), findsOneWidget);
     expect(find.textContaining('Upload first, pay when you share'), findsOneWidget);
-    expect(find.text('₹290  •  One wedding video'), findsOneWidget);
 
     final getStarted = find.text('Get Started');
     await tester.ensureVisible(getStarted);
@@ -39,7 +41,6 @@ void main() {
   testWidgets('welcome actions are disabled while account setup is busy', (tester) async {
     var started = false;
     var recovering = false;
-
 
     await tester.pumpWidget(MaterialApp(
       home: WelcomeScreen(
