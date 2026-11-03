@@ -10,17 +10,17 @@ Flutter Android app for private wedding-video sharing.
 - Upload locks only after the server verifies the full receiver transfer.
 - A new wedding video requires a new account and a new ₹290 payment.
 
-## Implemented app flows
-- Ivory and burgundy Flutter interface.
-- Supabase email OTP and phone OTP sign-in.
-- Authenticated customer dashboard and sign-out.
-- Google Drive OAuth connection, Android deep-link return and quota display.
-- Razorpay ₹290 checkout; payment remains pending until the server webhook verifies it.
-- Android video picker with streaming upload to Google Drive in 8 MB resumable chunks.
-- Saved Google Drive upload-session recovery when the customer reselects the same file.
-- Server-side file metadata/size verification before creating a private receiver link.
-- Copyable private guest link and receiver download service.
-- GitHub Actions workflow builds a release Android App Bundle and an installable Android APK, and saves the generated Android project files and dependency lockfile into the repository. The workflow uses a debug signing key unless all four Android signing secrets are configured. With the secrets present, it produces a Play Store upload-signed AAB.
+## Current app UI and code paths (not yet end-to-end acceptance-tested)
+- Premium wedding-style welcome/onboarding and email/phone OTP sign-in screens.
+- Customer dashboard with the ₹290 one-wedding plan, customer-owned Google Drive connection, quota display and 15 GB upload limit.
+- Upload progress UI backed by 8 MB Google Drive resumable chunks. If interrupted, the customer reselects the same file to resume from the saved session.
+- Private receiver link with a separate 6-digit password.
+- Guest download page served by a Cloudflare Worker that streams the file from the customer's Google Drive. It is a page/stream relay only; video storage remains in the customer's Drive, not R2 or app-owner storage.
+- Customer notification feed for server-recorded receiver completion, plus a manual control to delete only the Google Drive copy.
+- Razorpay ₹290 checkout code; the order remains pending until the server webhook verifies payment.
+- GitHub Actions builds an Android App Bundle and installable APK. The workflow uses a development signing key unless all four Android signing secrets are configured. With those secrets, it produces a Play Store upload-signed AAB.
+
+These are implemented code paths and UI, not proof that provider integrations or the full customer journey have passed real-device testing. See the launch checklist below before treating any flow as production-ready.
 
 ## Launch checklist
 - [Provider setup and Play Store launch checklist](docs/LAUNCH_SETUP.md)
