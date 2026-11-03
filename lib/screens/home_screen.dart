@@ -271,7 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: burgundy),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6F2438)),
             child: const Text('Delete Drive copy'),
           ),
         ],
@@ -333,6 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final paid = _order?['payment_status'] == 'paid';
     final locked = _order?['upload_locked'] == true;
     final videoReady = _video?['upload_status'] == 'uploaded';
+    final videoDeleted = _video?['upload_status'] == 'deleted';
     final videoSlotUsed = _video != null;
     return Scaffold(
       appBar: AppBar(
