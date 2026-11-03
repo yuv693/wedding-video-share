@@ -365,7 +365,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ]),
               ),
               const SizedBox(height: 18),
-              Card(child: Padding(
+              Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('1. One wedding video plan', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
@@ -389,7 +389,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ]),
               )),
               const SizedBox(height: 12),
-              Card(child: Padding(
+              Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('2. Connect your Google Drive', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
@@ -410,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ]),
               )),
               const SizedBox(height: 12),
-              Card(child: Padding(
+              Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('3. Upload your wedding video', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
@@ -445,7 +445,7 @@ class _HomeScreenState extends State<HomeScreen> {
               )),
               if (videoReady) ...[
                 const SizedBox(height: 12),
-                Card(child: Padding(
+                Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
                   padding: const EdgeInsets.all(18),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Text('4. Share with your guests', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
@@ -494,6 +494,9 @@ class _HomeScreenState extends State<HomeScreen> {
               if (videoDeleted) ...[
                 const SizedBox(height: 12),
                 Card(
+                  color: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))),
                   child: ListTile(
                     leading: const Icon(Icons.delete_sweep_outlined, color: burgundy),
                     title: const Text('Drive copy deleted'),
@@ -503,6 +506,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
               const SizedBox(height: 12),
               Card(
+                color: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))),
                 child: Padding(
                   padding: const EdgeInsets.all(18),
                   child: Column(
