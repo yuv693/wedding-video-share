@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/welcome_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/account_recovery_screen.dart';
 import 'services/backend.dart';
 
 Future<void> main() async {
@@ -53,6 +54,7 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   bool _starting = false;
   bool _signedIn = supabase.auth.currentSession != null;
+  bool _recovering = false;
   String? _error;
 
   Future<void> _getStarted() async {
@@ -75,8 +77,15 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (_signedIn) return const HomeScreen();
+    if (_recovering) {
+      return AccountRecoveryScreen(
+        onBack: () => setState(() => _recovering = false),
+        onAuthenticated: () => setState(() { _signedIn = true; _recovering = false; }),
+      );
+    }
     return WelcomeScreen(
       onGetStarted: _getStarted,
+      onRecoverAccount: () => setState(() => _recovering = true),
       busy: _starting,
       error: _error,
     );
