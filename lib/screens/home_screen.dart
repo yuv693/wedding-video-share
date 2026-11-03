@@ -22,6 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
   bool _busy = false, _uploading = false;
+  int _selectedTab = 0;
   double _uploadProgress = 0;
   String? _status, _driveEmail, _shareUrl, _sharePin;
   Map<String, dynamic>? _order, _quota, _video;
@@ -343,12 +344,24 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(onPressed: _busy || _uploading ? null : () => supabase.auth.signOut(), icon: const Icon(Icons.logout), tooltip: 'Sign out'),
         ],
       ),
+      bottomNavigationBar: NavigationBar(
+        backgroundColor: Colors.white,
+        indicatorColor: const Color(0xFFF4EAE6),
+        selectedIndex: _selectedTab,
+        onDestinationSelected: (index) => setState(() => _selectedTab = index),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.video_library_outlined), selectedIcon: Icon(Icons.video_library_rounded), label: 'Videos'),
+          NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Account'),
+        ],
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _refresh,
           child: ListView(
             padding: const EdgeInsets.all(20),
             children: [
+              if (_selectedTab == 0) ...[
               Container(
                 padding: const EdgeInsets.all(22),
                 decoration: BoxDecoration(color: const Color(0xFFF4EAE6), borderRadius: BorderRadius.circular(22)),
@@ -388,7 +401,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                 ]),
               )),
-              const SizedBox(height: 12),
+              ],
+              if (_selectedTab == 1) ...[
               Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -504,6 +518,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ],
+              ],
+              if (_selectedTab == 2) ...[
               const SizedBox(height: 12),
               Card(
                 color: Colors.white,
@@ -566,6 +582,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   TextButton(onPressed: () => _openLegal('terms-of-service.md'), child: const Text('Terms of Service')),
                 ],
               ),
+              ],
             ],
           ),
         ),
