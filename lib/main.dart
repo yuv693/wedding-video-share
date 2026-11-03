@@ -57,6 +57,7 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   StreamSubscription<AuthState>? _subscription;
   bool _signedIn = supabase.auth.currentSession != null;
+  bool _showGoogleConnect = false;
 
   @override
   void initState() {
@@ -77,10 +78,9 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (_signedIn) return const HomeScreen();
-    return WelcomeScreen(onGetStarted: () {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const AuthScreen()),
-      );
-    });
+    if (_showGoogleConnect) {
+      return AuthScreen(onBack: () => setState(() => _showGoogleConnect = false));
+    }
+    return WelcomeScreen(onGetStarted: () => setState(() => _showGoogleConnect = true));
   }
 }
