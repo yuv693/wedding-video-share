@@ -428,12 +428,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Text('Celebrate. Share. Cherish.',
                     style: TextStyle(fontSize: 13, letterSpacing: 1.2, fontWeight: FontWeight.w800, color: burgundy)),
                   const SizedBox(height: 8),
-                  const Text('Your wedding memories, beautifully shared.',
+                  const Text('One wedding. One clear plan.',
                     style: TextStyle(fontSize: 23, height: 1.2, fontWeight: FontWeight.w800, color: burgundy)),
                   const SizedBox(height: 8),
                   Text(user?.email ?? user?.phone ?? 'Your account'),
                   const SizedBox(height: 8),
-                  const Text('One wedding. One clear plan. Your own Drive.',
+                  const Text('Your own Google Drive. Your memories stay in your control.',
                     style: TextStyle(color: Color(0xFF66575B), fontSize: 13)),
                 ]),
               ),
@@ -478,7 +478,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Text('Your Drive. Your storage.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
                   Text(_driveEmail == null
-                      ? 'Your video is stored in your own Google Drive. Wedding Video Share does not provide video storage.'
+                      ? 'Connect your Google Drive to store your wedding video securely using your own Drive storage.'
                       : 'Connected to your Google Drive: $_driveEmail'),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
@@ -511,7 +511,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       onPressed: _busy || _uploading || locked || _driveEmail == null ? null : _chooseAndUpload,
                       style: FilledButton.styleFrom(backgroundColor: burgundy),
                       icon: const Icon(Icons.video_file),
-                      label: const Text('Choose video and upload'),
+                      label: const Text('Choose your wedding video'),
                     ),
                   if (_uploading) ...[
                     const SizedBox(height: 14),
@@ -531,7 +531,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
                   padding: const EdgeInsets.all(18),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('Your video is uploaded.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                    const Text('A private link, ready to send.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
                     const Text('Pay ₹290 to unlock private sharing. After the payment is verified, your private link and 6-digit PIN will appear here. Your Google Drive copy stays saved until you choose to delete it.'),
                     const SizedBox(height: 12),
