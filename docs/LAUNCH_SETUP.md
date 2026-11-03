@@ -4,7 +4,7 @@ Keep provider secrets out of source code, GitHub files, screenshots and chat.
 
 ## 1. Customer account recovery
 
-The app starts with a private Supabase anonymous customer session. Before payment, the customer must add and verify an email address from Account → Protect your account. That email is used to recover the same customer account, order and video after changing or reinstalling a phone.
+The app starts with a private Supabase anonymous customer session. Before uploading or paying, the customer must add and verify an email address from Account → Protect your account. That email is used to recover the same customer account, order and video after changing or reinstalling a phone.
 
 In Supabase Dashboard:
 1. Keep Authentication → Sign In / Providers → Anonymous Sign-Ins enabled.
@@ -14,18 +14,18 @@ In Supabase Dashboard:
 5. Configure production SMTP and test delivery, spam-folder handling, resend limits and OTP expiry.
 6. Test Get Started → Account → Protect your account → verify email → pay → reinstall on a test device → Recover account. Confirm the original order and video remain.
 
-Do not let customers pay until a recovery email is verified. Phone-only recovery is not enabled in this app build.
+Do not let customers upload or pay until a recovery email is verified. Phone-only recovery is not enabled in this app build.
 
 ## 2. Google Drive OAuth and encryption
 
 This is separate from customer account recovery. It grants access to the customer's chosen Drive.
-1. In Supabase Dashboard → Project Settings → API Keys → Legacy API keys, copy the legacy service_role key and save it as SUPABASE_SERVICE_ROLE_KEY under Project Settings → Edge Functions → Secrets. Do not paste this key into chat or GitHub. The OAuth state RPC and other server-only RPC calls require this legacy service-role JWT; the current logs show the newer sb_secret fallback being used and PostgREST returning PGRST202.
+1. In Supabase Dashboard → Project Settings → API Keys → Legacy API keys, copy the legacy service_role key and save it as SERVICE_ROLE_KEY under Project Settings → Edge Functions → Secrets. Do not paste this key into chat or GitHub. The server functions read this custom secret name because Supabase reserves the SUPABASE_ prefix.
 2. Enable the Google Drive API in Google Cloud Console.
-2. Set the Drive OAuth web client redirect URI to:
+3. Set the Drive OAuth web client redirect URI to:
 https://mnaswhizatnwfwmjmtvm.supabase.co/functions/v1/google-drive-oauth
-3. Before real customers connect Drive, replace GOOGLE_TOKEN_ENCRYPTION_KEY in Supabase Edge Function Secrets with a fresh cryptographically random 32-byte base64 value. Do not reuse the old key or share it in chat.
-4. Complete Google's OAuth consent-screen production verification as required.
-5. Test Drive connection/return, account email, quota, folder creation, upload and delete on a real Android device.
+4. Before real customers connect Drive, replace GOOGLE_TOKEN_ENCRYPTION_KEY in Supabase Edge Function Secrets with a fresh cryptographically random 32-byte base64 value. Do not reuse the old key or share it in chat.
+5. Complete Google's OAuth consent-screen production verification as required.
+6. Test Drive connection/return, account email, quota, folder creation, upload and delete on a real Android device.
 
 ## 3. Razorpay
 
@@ -50,9 +50,10 @@ https://mnaswhizatnwfwmjmtvm.supabase.co/functions/v1/razorpay-payments/webhook
 
 - Link and verify a recovery email, then recover the same account after app data is cleared or the app is reinstalled.
 - Test Google Drive OAuth, account email and quota.
-- Test ₹290 payment, duplicate-tap protection and webhook verification.
+- Test upload first without payment, then ₹290 payment from the Share Video action; confirm the share link appears only after webhook verification.
 - Interrupt a small upload, reselect the same file and confirm resume.
 - Test a large upload near 15 GB on a suitable Drive account.
+- Confirm an unpaid uploaded video cannot create or open a guest share link.
 - Create a private guest link; verify the 6-digit PIN and download on another device.
 - Interrupt a guest download and confirm the order does not lock.
 - Complete a full transfer and confirm exact expected bytes, customer notification and upload lock.
