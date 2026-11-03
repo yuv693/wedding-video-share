@@ -521,7 +521,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 6),
                     Text('${(_uploadProgress * 100).toStringAsFixed(1)}% uploaded · resumable 8 MB chunks'),
                   ],
-                  if (!paid) const Text('Complete the ₹290 payment first.', style: TextStyle(color: Colors.black54)),
+                  if (!paid) const Text('Payment is needed only when you share your uploaded video.', style: TextStyle(color: Colors.black54)),
                   if (paid && _driveEmail == null) const Text('Connect Google Drive before uploading.', style: TextStyle(color: Colors.black54)),
                   if (locked) const Text('This account cannot upload another video.', style: TextStyle(color: Colors.black54)),
                 ]),
