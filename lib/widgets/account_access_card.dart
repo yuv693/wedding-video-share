@@ -16,6 +16,7 @@ class _AccountAccessCardState extends State<AccountAccessCard> {
   final _email = TextEditingController();
   final _otp = TextEditingController();
   bool _sent = false;
+  bool _signingBackIn = false;
   bool _busy = false;
   String? _message;
   bool _error = false;
@@ -63,11 +64,28 @@ class _AccountAccessCardState extends State<AccountAccessCard> {
     }
     setState(() { _busy = true; _message = null; _error = false; });
     try {
-      await supabase.auth.verifyOTP(email: email, token: code, type: OtpType.emailChange);
+      final result = await supabase.auth.verifyOTP(
+        email: email,
+        token: code,
+        type: _signingBackIn ? OtpType.email : OtpType.emailChange,
+      );
+      if (!_signingBackIn && supabase.auth.currentSession == null) {
+        await supabase.auth.signInWithOtp(email: email, shouldCreateUser: false);
+        if (!mounted) return;
+        setState(() {
+          _signingBackIn = true;
+          _message = 'Email confirmed. Enter the new sign-in code sent to your email to finish securing this account.';
+        });
+        return;
+      }
+      if (_signingBackIn && (result.session == null || result.user == null)) {
+        throw const AuthException('The sign-in code did not restore this account. Request a new code.');
+      }
       if (!mounted) return;
       final confirmed = supabase.auth.currentUser?.emailConfirmedAt != null;
       setState(() {
         _sent = false;
+        _signingBackIn = false;
         _message = confirmed
             ? 'Email verified. Your account can now be recovered on another device.'
             : 'Verification was accepted. Refresh your account status to confirm the email.';
