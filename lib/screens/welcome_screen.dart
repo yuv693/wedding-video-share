@@ -55,7 +55,7 @@ class WelcomeScreen extends StatelessWidget {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
                         textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                       ),
-                      child: busy ? const SizedBox(height: 19, width: 19, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Continue with Google'),
+                      child: busy ? const SizedBox(height: 19, width: 19, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text('Choose Google Account & Connect Drive'),
                     )),
                     if (error != null) ...[
                       const SizedBox(height: 14),
