@@ -11,7 +11,8 @@ Wedding Video Share helps a customer upload one wedding video to the customer's 
 ## One-video plan and payment
 
 - The plan price is **₹290** for one customer account and one wedding-video upload/share cycle.
-- One paid account may upload one video only.
+- One customer account may upload one video only. The customer can upload before paying; the ₹290 payment is requested when the customer chooses to share the uploaded video.
+- A private guest link and PIN are created only after Razorpay confirms the ₹290 payment through the server-side webhook.
 - The maximum supported video size is **15,000,000,000 bytes (15 GB decimal)**.
 - The account's upload is locked after the service verifies that a guest download streamed the full expected number of bytes to the end of the server response.
 - A new wedding video requires a new account and a new ₹290 payment.
