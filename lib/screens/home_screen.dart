@@ -261,7 +261,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final file = result.files.single;
       if (!mounted) return;
       setState(() { _uploading = true; _busy = false; _status = 'Uploading ${file.name}…'; });
-      final upload = await _uploadService.upload(
+      await _uploadService.upload(
         orderId: _order!['id'].toString(),
         file: file,
         onProgress: (value) {
