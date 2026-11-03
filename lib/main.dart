@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'screens/auth_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/backend.dart';
@@ -29,10 +28,7 @@ class WeddingVideoShareApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFFFFCF8),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: burgundy,
-          brightness: Brightness.light,
-        ),
+        colorScheme: ColorScheme.fromSeed(seedColor: burgundy, brightness: Brightness.light),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFFFFFCF8),
           foregroundColor: burgundy,
@@ -45,8 +41,8 @@ class WeddingVideoShareApp extends StatelessWidget {
   }
 }
 
-/// Shows the welcome page to signed-out visitors; Google account sign-in
-/// creates the customer identity used for payment and Drive ownership.
+/// Creates a private backend customer session without Supabase Google sign-in.
+/// The customer connects Google Drive directly from the home screen.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -55,32 +51,34 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  StreamSubscription<AuthState>? _subscription;
+  bool _starting = false;
   bool _signedIn = supabase.auth.currentSession != null;
-  bool _showGoogleConnect = false;
+  String? _error;
 
-  @override
-  void initState() {
-    super.initState();
-    _subscription = supabase.auth.onAuthStateChange.listen((state) {
-      if (mounted) {
-        setState(() => _signedIn = state.session != null);
+  Future<void> _getStarted() async {
+    setState(() { _starting = true; _error = null; });
+    try {
+      if (supabase.auth.currentSession == null) {
+        await supabase.auth.signInAnonymously();
       }
-    });
-  }
-
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    super.dispose();
+      if (mounted) setState(() => _signedIn = true);
+    } on AuthException catch (e) {
+      if (mounted) setState(() => _error =
+          'Account setup is not enabled yet. Please contact support. (' + e.message + ')');
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not start your account. Please try again.');
+    } finally {
+      if (mounted) setState(() => _starting = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (_signedIn) return const HomeScreen();
-    if (_showGoogleConnect) {
-      return AuthScreen(onBack: () => setState(() => _showGoogleConnect = false));
-    }
-    return WelcomeScreen(onGetStarted: () => setState(() => _showGoogleConnect = true));
+    return WelcomeScreen(
+      onGetStarted: _getStarted,
+      busy: _starting,
+      error: _error,
+    );
   }
 }
