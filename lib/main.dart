@@ -56,6 +56,25 @@ class _AuthGateState extends State<AuthGate> {
   bool _signedIn = supabase.auth.currentSession != null;
   bool _recovering = false;
   String? _error;
+  StreamSubscription<AuthState>? _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSubscription = supabase.auth.onAuthStateChange.listen((state) {
+      if (!mounted) return;
+      setState(() {
+        _signedIn = state.session != null;
+        if (_signedIn) _recovering = false;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
 
   Future<void> _getStarted() async {
     setState(() { _starting = true; _error = null; });
