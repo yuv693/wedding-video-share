@@ -96,8 +96,8 @@ class WelcomeScreen extends StatelessWidget {
                     detail: 'Choose your Google account and allow access to save your video in your own Drive.'),
                   const SizedBox(height: 12),
                   const _WelcomeStep(number: '3', icon: Icons.video_file_outlined,
-                    title: 'Pay ₹290, upload and share',
-                    detail: 'Upload one video up to 15 GB, share a private link and get a completion update.'),
+                    title: 'Upload first, pay when you share',
+                    detail: 'Upload one video up to 15 GB for free. Pay ₹290 only when you are ready to create your private share link.'),
                   const SizedBox(height: 26),
                   FilledButton(
                     onPressed: busy ? null : onGetStarted,
