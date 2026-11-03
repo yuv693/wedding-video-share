@@ -6,7 +6,7 @@ This policy explains how Wedding Video Share handles information when you use th
 
 ## Information we handle
 
-- **Account information:** your email address or mobile number used to sign in through one-time passwords.
+- **Account information:** your Supabase customer account identifier and, when you protect the account, your verified email address used for account recovery through a one-time code.
 - **Google Drive connection:** the Google account email address and an encrypted refresh token needed to upload and stream the video from your own Google Drive.
 - **Video information:** filename, file size, MIME type, Google Drive file identifier and upload status. The video itself is stored in your Google Drive, not in Wedding Video Share's own video-storage bucket.
 - **Payment information:** order identifiers, payment status, amount, currency and gateway references from Razorpay. Card numbers, UPI PINs and banking passwords are handled by the payment provider and are not requested by this app.
@@ -21,7 +21,7 @@ The app does not delete the original video on your phone. Your Google Drive copy
 
 ## Google Drive access
 
-When you connect Google Drive, you authorize the app to create and read the video file it manages for this service. The app uses Google Drive to store your video in your own account and stream it to a guest who has your private link. Your Google Drive quota is used. Google handles its own processing under Google's privacy terms.
+When you connect Google Drive, you separately authorize the app to create and read the video file it manages for this service. This Google authorization is not used as the customer's Wedding Video Share account sign-in. The app uses Google Drive to store your video in your own account and stream it to a guest who has your private link. Your Google Drive quota is used. Google handles its own processing under Google's privacy terms.
 
 ## Sharing
 
@@ -31,7 +31,7 @@ Anyone who receives an active guest link may be able to download the wedding vid
 
 The service uses:
 - **Supabase** for authentication, database and server functions.
-- **Google** for Google sign-in and Google Drive storage.
+- **Google** for the separate Google Drive authorization and customer-owned video storage.
 - **Razorpay** for payment processing.
 - **Cloudflare Workers** to stream the video from Google Drive to a guest.
 
