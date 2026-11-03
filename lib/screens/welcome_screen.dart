@@ -31,7 +31,7 @@ class WelcomeScreen extends StatelessWidget {
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final cardWidth = constraints.maxWidth.clamp(280.0, 420.0);
+                final cardWidth = constraints.maxWidth.clamp(280.0, 420.0).toDouble();
                 return SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 28),
                   child: ConstrainedBox(
