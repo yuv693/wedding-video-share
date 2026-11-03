@@ -602,6 +602,34 @@ class _HomeScreenState extends State<HomeScreen> {
               if (_order?['upload_locked'] == true) ...[
                 const SizedBox(height: 12),
                 Card(
+                  color: const Color(0xFFF4EAE6),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: const BorderSide(color: Color(0xFFE8D8D0)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.check_circle_rounded, color: Color(0xFF26734D), size: 34),
+                        const SizedBox(height: 10),
+                        const Text('Download complete!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: burgundy)),
+                        const SizedBox(height: 6),
+                        const Text('Thank you for sharing your special day. The full video transfer was verified by our server. Your Google Drive copy remains saved until you choose to delete it.'),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () => setState(() => _selectedTab = 1),
+                          icon: const Icon(Icons.video_library_outlined),
+                          label: const Text('View video and storage'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
                   color: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
