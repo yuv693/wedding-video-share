@@ -24,11 +24,11 @@ void main() {
 
     expect(find.text('WVS'), findsOneWidget);
     expect(find.text('Celebrate. Share. Cherish.'), findsOneWidget);
-    expect(find.text('Get Started'), findsOneWidget);
+    expect(find.text('Choose Google Account & Connect Drive'), findsOneWidget);
     expect(find.text('One wedding. One beautiful way to share.'), findsOneWidget);
 
-    await tester.ensureVisible(find.text('Get Started'));
-    await tester.tap(find.text('Get Started'));
+    await tester.ensureVisible(find.text('Choose Google Account & Connect Drive'));
+    await tester.tap(find.text('Choose Google Account & Connect Drive'));
     expect(started, isTrue);
 
     await tester.ensureVisible(find.text('Already have an account? Recover it'));
