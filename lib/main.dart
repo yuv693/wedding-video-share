@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'screens/welcome_screen.dart';
 import 'screens/home_screen.dart';
@@ -42,8 +43,8 @@ class WeddingVideoShareApp extends StatelessWidget {
   }
 }
 
-/// Creates a private backend customer session without Supabase Google sign-in.
-/// The customer connects Google Drive directly from the home screen.
+/// Supabase keeps the private app customer record. Google OAuth confirms
+/// the customer's Google account and grants the separate Drive file permission.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -82,12 +83,38 @@ class _AuthGateState extends State<AuthGate> {
       if (supabase.auth.currentSession == null) {
         await supabase.auth.signInAnonymously();
       }
+
+      // Start the existing secure Google OAuth flow immediately after
+      // creating/restoring the private customer session. The server binds
+      // OAuth state to this authenticated customer and stores Drive tokens
+      // encrypted; the app never receives a Google refresh token.
+      final response = await supabase.functions.invoke(
+        'google-drive-oauth',
+        body: {'action': 'start'},
+      );
+      final data = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : <String, dynamic>{};
+      final authorizationUrl = data['authorizationUrl']?.toString();
+      if (response.status != 200 || data['ok'] != true || authorizationUrl == null) {
+        throw Exception(data['error']?.toString() ??
+            'Google confirmation is not configured yet. Please try again later.');
+      }
+      final opened = await launchUrl(
+        Uri.parse(authorizationUrl),
+        mode: LaunchMode.externalApplication,
+      );
+      if (!opened) throw Exception('Could not open Google confirmation.');
+
       if (mounted) setState(() => _signedIn = true);
     } on AuthException catch (e) {
       if (mounted) setState(() => _error =
           'Account setup is not enabled yet. Please contact support. (' + e.message + ')');
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Could not start your account. Please try again.');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error =
+            'Could not start Google confirmation. Please try again. Details: $e');
+      }
     } finally {
       if (mounted) setState(() => _starting = false);
     }
