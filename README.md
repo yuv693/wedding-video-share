@@ -32,7 +32,7 @@ These are implemented code paths and UI, not proof that provider integrations or
 These are draft documents. Add a monitored support contact, publish stable public URLs and obtain legal review before release.
 
 ## Still required before public launch
-- Configure the Supabase email template to include `{{ .Token }}` for numeric email OTP.
+- Configure custom SMTP for reliable email delivery and update the Supabase email template to include `{{ .Token }}` for numeric email OTP.
 - Enable phone authentication and configure a paid SMS provider in Supabase.
 - Replace the previously exposed Google token-encryption secret with a fresh random 32-byte base64 key before any real customer connects Google Drive.
 - Configure Razorpay keys and webhook in test mode, then run a verified payment test.
