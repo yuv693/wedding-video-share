@@ -4,7 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/backend.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  const AuthScreen({super.key, required this.onBack});
+
+  final VoidCallback onBack;
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -40,7 +42,7 @@ class _AuthScreenState extends State<AuthScreen> {
         backgroundColor: const Color(0xFFFFFCF8),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          onPressed: _busy ? null : widget.onBack,
         ),
       ),
       body: SafeArea(
