@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/welcome_screen.dart';
 import 'services/backend.dart';
 
 Future<void> main() async {
@@ -47,6 +48,7 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   StreamSubscription<AuthState>? _subscription;
   bool _signedIn = supabase.auth.currentSession != null;
+  bool _showWelcome = true;
 
   @override
   void initState() {
@@ -60,5 +62,16 @@ class _AuthGateState extends State<AuthGate> {
   void dispose() { _subscription?.cancel(); super.dispose(); }
 
   @override
-  Widget build(BuildContext context) => _signedIn ? const HomeScreen() : const AuthScreen();
+  @override
+  Widget build(BuildContext context) {
+    if (_signedIn) return const HomeScreen();
+    if (_showWelcome) {
+      return WelcomeScreen(onGetStarted: () {
+        if (mounted) setState(() => _showWelcome = false);
+      });
+    }
+    return AuthScreen(onBack: () {
+      if (mounted) setState(() => _showWelcome = true);
+    });
+  }
 }
