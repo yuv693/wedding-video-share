@@ -341,7 +341,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('Wedding Video Share', style: TextStyle(fontWeight: FontWeight.w800)),
         actions: [
           IconButton(onPressed: _busy || _uploading ? null : _refresh, icon: const Icon(Icons.refresh), tooltip: 'Refresh'),
-          IconButton(onPressed: _busy || _uploading ? null : () => supabase.auth.signOut(), icon: const Icon(Icons.logout), tooltip: 'Sign out'),
+          IconButton(onPressed: _busy || _uploading ? null : () => setState(() => _selectedTab = 2), icon: const Icon(Icons.person_outline_rounded), tooltip: 'Account'),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -368,12 +368,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Icon(Icons.favorite, color: burgundy, size: 34),
                   const SizedBox(height: 12),
+                  const Text('Celebrate. Share. Cherish.',
+                    style: TextStyle(fontSize: 13, letterSpacing: 1.2, fontWeight: FontWeight.w800, color: burgundy)),
+                  const SizedBox(height: 8),
                   const Text('Your wedding memories, beautifully shared.',
                     style: TextStyle(fontSize: 23, height: 1.2, fontWeight: FontWeight.w800, color: burgundy)),
                   const SizedBox(height: 8),
                   Text(user?.email ?? user?.phone ?? 'Your account'),
                   const SizedBox(height: 8),
-                  const Text('One wedding. One video. Your own Drive.',
+                  const Text('One wedding. One clear plan. Your own Drive.',
                     style: TextStyle(color: Color(0xFF66575B), fontSize: 13)),
                 ]),
               ),
@@ -381,9 +384,10 @@ class _HomeScreenState extends State<HomeScreen> {
               Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('1. One wedding video plan', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const Text('Your Wedding', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
-                  const Text('₹290 • One account • One video upload and share cycle'),
+                  const Text('₹290  •  One-Wedding Plan'),
+                  const Text('Upload one wedding video up to 15 GB.'),
                   const Text('Maximum video size: 15 GB (decimal).'),
                   const SizedBox(height: 12),
                   if (paid)
@@ -406,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('2. Connect your Google Drive', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const Text('Your Drive. Your storage.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
                   Text(_driveEmail == null
                       ? 'Your video is stored in your own Google Drive. Wedding Video Share does not provide video storage.'
@@ -427,7 +431,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('3. Upload your wedding video', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const Text('Upload without the guesswork.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
                   const Text('Choose one video up to 15 GB. It uploads to your own Google Drive; your phone original is never deleted. If the connection stops, choose the same file again to resume.'),
                   const SizedBox(height: 12),
@@ -462,7 +466,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
                   padding: const EdgeInsets.all(18),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Text('4. Share with your guests', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                    const Text('A private link, ready to send.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
                     const Text('Create a private download link and send the 6-digit password separately. Your Google Drive copy stays saved until you choose to delete it.'),
                     const SizedBox(height: 12),
