@@ -2,36 +2,34 @@
 
 This checklist is for the publisher. Do not put provider secrets in source code, GitHub files, screenshots or chat.
 
-## 1. Supabase email OTP and SMTP
+## 1. Google account sign-in (customer identity)
+
+The app's Get Started button uses Google sign-in through Supabase Auth. This is separate from Google Drive authorization.
 
 1. Open the WeddingVideoShare project in Supabase.
-2. Go to **Authentication → Emails → SMTP Settings** and configure a custom SMTP provider before public use. The built-in email service is intended for trying Auth: it has a strict project-wide hourly limit and only sends to organization team-member addresses.
-3. Enter the SMTP host, port, username, password and sender address supplied by your email provider. Keep these credentials only in the Supabase dashboard; never put them in GitHub files or chat.
-4. Go to **Authentication → Email Templates** and open the Magic Link template.
-5. Ensure the email includes the numeric token variable `{{ .Token }}`, because the app supports entering a code as well as opening the email link.
-6. Save and test sign-in with an email address you control. If you need a higher send rate, review **Authentication → Rate Limits** after custom SMTP is configured.
+2. Go to **Authentication → Sign In / Providers → Google** and enable the Google provider.
+3. Create or select a Google OAuth client for the Supabase Auth provider. Use the callback URL shown in the Supabase Google provider setup screen (normally `https://mnaswhizatnwfwmjmtvm.supabase.co/auth/v1/callback`) as an authorized redirect URI in Google Cloud Console.
+4. Add the Android app redirect URI `weddingvideoshare://login-callback` to Supabase **Authentication → URL Configuration → Redirect URLs**.
+5. Save the Google client ID and client secret only in the Supabase dashboard. Never put the client secret in the Flutter app, GitHub or chat.
+6. Test Google sign-in on a real Android device. Confirm the browser returns to the app and the customer session is created.
 
-## 2. Supabase phone OTP
+If the Google provider is not enabled or its credentials/redirects are incorrect, the Google sign-in button will not complete. Provider configuration cannot be confirmed from the app build alone.
 
-1. Go to **Authentication → Providers → Phone**.
-2. Enable phone sign-in.
-3. Configure an SMS provider such as Twilio (provider account and charges are separate).
-4. Test an Indian number in international format, for example `+91XXXXXXXXXX`.
+## 2. Google Drive OAuth and encryption
 
-Phone OTP will not work until the provider is configured.
+This is a second, separate Google authorization. It grants access to the customer's Drive so the wedding video is saved in the customer's own Drive.
 
-## 3. Google Drive OAuth and encryption
-
-1. In Google Cloud Console, confirm the Drive API is enabled.
-2. Confirm the OAuth web client redirect URI is exactly:
+1. In Google Cloud Console, confirm the Google Drive API is enabled.
+2. Confirm the Drive OAuth web client redirect URI is exactly:
    `https://mnaswhizatnwfwmjmtvm.supabase.co/functions/v1/google-drive-oauth`
 3. Before any real customer connects Drive, replace the previously exposed `GOOGLE_TOKEN_ENCRYPTION_KEY` in **Supabase → Edge Functions → Secrets** with a fresh cryptographically random 32-byte base64 value.
 4. Do not reuse the old key and do not send the new key in chat or commit it to GitHub.
 5. Change the OAuth consent screen from Testing to the appropriate production status and complete any Google verification that Google requires.
+6. Test the Drive connect/return flow, account email and quota display on a real Android device.
 
 Rotating the encryption key before customer tokens are stored avoids losing the ability to decrypt tokens created with the previous key.
 
-## 4. Razorpay
+## 3. Razorpay
 
 1. Create or select the Razorpay account and use test-mode keys first.
 2. In Supabase Edge Function Secrets, set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET`.
@@ -41,7 +39,7 @@ Rotating the encryption key before customer tokens are stored avoids losing the 
 5. Complete a test payment and confirm the order becomes paid only after the webhook is received.
 6. Only after successful test verification should live keys be used.
 
-## 5. Android and Play Store
+## 4. Android and Play Store
 
 - Android application ID: `com.weddingvideoshare.app`. Confirm it is the final package ID before first publication.
 - Create a secure Android upload keystore on a trusted computer. Keep the keystore file and passwords outside the repository.
@@ -55,11 +53,11 @@ Rotating the encryption key before customer tokens are stored avoids losing the 
 - Create the Play Store listing, app screenshots, store icon, content rating, data-safety declarations and app-access instructions.
 - Publish the privacy policy and terms at stable public HTTPS URLs, and add a monitored support contact to both documents.
 
-## 6. Real-device acceptance tests
+## 5. Real-device acceptance tests
 
 Do not publish until these tests pass on real Android devices:
 
-- Email OTP and phone OTP sign-in.
+- Google account sign-in and app deep-link return.
 - Google Drive OAuth, account email and quota display.
 - ₹290 payment, duplicate-tap protection and webhook verification.
 - Upload a small video, interrupt the network, reselect the same file and resume.
