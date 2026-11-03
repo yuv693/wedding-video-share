@@ -5,7 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/backend.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key});
+  const AuthScreen({super.key, this.onBack});
+
+  final VoidCallback? onBack;
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
@@ -56,7 +58,12 @@ class _AuthScreenState extends State<AuthScreen> {
             : 'Login link sent. Open it from your email on this phone. If your email contains a code instead, enter it below.';
       });
     } on AuthException catch (e) {
-      if (mounted) setState(() => _error = e.message);
+      if (mounted) {
+        final message = e.message.toLowerCase();
+        setState(() => _error = message.contains('rate limit') || message.contains('too many')
+            ? 'Email sending is temporarily limited. Please wait before trying again.'
+            : e.message);
+      }
     } catch (_) {
       if (mounted) setState(() => _error = 'Could not send the code. Please try again.');
     } finally {
@@ -97,13 +104,22 @@ class _AuthScreenState extends State<AuthScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.favorite, size: 54, color: burgundy),
+                  if (widget.onBack != null)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        onPressed: _busy ? null : widget.onBack,
+                        icon: const Icon(Icons.arrow_back_rounded, color: burgundy),
+                        tooltip: 'Back',
+                      ),
+                    ),
+                  const Icon(Icons.favorite_rounded, size: 54, color: burgundy),
                   const SizedBox(height: 18),
-                  const Text('Welcome', textAlign: TextAlign.center,
+                  const Text('Welcome back', textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: burgundy)),
                   const SizedBox(height: 8),
-                  const Text('Sign in to share your wedding memories.',
-                    textAlign: TextAlign.center, style: TextStyle(color: Colors.black54)),
+                  const Text('Sign in to share your wedding memories. We will send a secure code or login link.',
+                    textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, height: 1.4)),
                   const SizedBox(height: 28),
                   SegmentedButton<bool>(
                     segments: const [
@@ -154,7 +170,10 @@ class _AuthScreenState extends State<AuthScreen> {
                     TextButton(onPressed: _busy ? null : () => setState(() {
                       _codeSent = false; _otp.clear(); _message = null;
                     }), child: const Text('Change email or phone number')),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
+                  const Text('No password is needed. Use an email address or mobile number you can access.',
+                    textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.black45)),
+                  const SizedBox(height: 12),
                   const Text('By continuing, you agree to the service terms and privacy policy.',
                     textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.black45)),
                   Wrap(
