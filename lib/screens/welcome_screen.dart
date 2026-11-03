@@ -114,22 +114,22 @@ class WelcomeScreen extends StatelessWidget {
                   const _WelcomeStep(
                     number: '1',
                     icon: Icons.cloud_outlined,
-                    title: 'Connect your Google Drive',
-                    detail: 'Your video stays in your own Drive account.',
+                    title: 'Connect your Google account',
+                    detail: 'Create your customer account securely with Google sign-in.',
                   ),
                   const SizedBox(height: 12),
                   const _WelcomeStep(
                     number: '2',
                     icon: Icons.video_file_outlined,
-                    title: 'Upload one wedding video',
-                    detail: 'Choose one video up to 15 GB. Resume by selecting the same file if interrupted.',
+                    title: 'Choose the ₹290 plan and connect Drive',
+                    detail: 'Pay for one video, then authorize your own Google Drive for storage.',
                   ),
                   const SizedBox(height: 12),
                   const _WelcomeStep(
                     number: '3',
                     icon: Icons.link_rounded,
-                    title: 'Share a private link',
-                    detail: 'Your guest downloads the video and you get a completion update.',
+                    title: 'Upload and share one wedding video',
+                    detail: 'Upload up to 15 GB, share a private link, and get a completion update.',
                   ),
                   const SizedBox(height: 26),
                   FilledButton(
