@@ -25,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   double _uploadProgress = 0;
   String? _status, _driveEmail, _shareUrl, _sharePin;
   Map<String, dynamic>? _order, _quota, _video;
+  List<Map<String, dynamic>> _notifications = [];
 
   @override
   void initState() {
@@ -66,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _refresh() async {
     await _loadOrder();
     await _loadQuota();
+    await _loadNotifications();
   }
 
   Future<void> _loadOrder() async {
@@ -77,10 +79,12 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _order = row);
       if (row != null) {
         final video = await supabase.from('wedding_videos')
-          .select('id,original_filename,file_size_bytes,upload_status')
+          .select('id,original_filename,file_size_bytes,upload_status,google_drive_account_email,deleted_at')
           .eq('order_id', row['id'])
           .maybeSingle();
         if (mounted) setState(() => _video = video);
+      } else {
+        setState(() => _video = null);
       }
     } catch (_) {
       if (mounted) setState(() => _status = 'Account status could not be loaded. Pull down to refresh.');
@@ -96,6 +100,19 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (_) {
       // No linked Drive account yet, or the server has not been configured.
+    }
+  }
+
+  Future<void> _loadNotifications() async {
+    try {
+      final rows = await supabase.from('customer_notifications')
+        .select('id,notification_type,title,message,created_at,read_at')
+        .order('created_at', ascending: false)
+        .limit(5);
+      if (!mounted) return;
+      setState(() => _notifications = rows.map((row) => _map(row)).toList());
+    } catch (_) {
+      // Notifications are optional UI; the server remains the source of truth.
     }
   }
 
@@ -237,6 +254,60 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _deleteDriveCopy() async {
+    if (_video == null || _video!['id'] == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete your Google Drive copy?'),
+        content: const Text(
+          'This permanently deletes the Wedding Video Share copy from your own Google Drive. '
+          'The original video on your phone will not be touched. Your one-video plan will remain used.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep video'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: burgundy),
+            child: const Text('Delete Drive copy'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() { _busy = true; _status = null; });
+    try {
+      final response = await supabase.functions.invoke('google-drive-storage', body: {
+        'action': 'delete_video',
+        'videoId': _video!['id'],
+      });
+      final data = _map(response.data);
+      if (response.status != 200 || data['ok'] != true || data['deleted'] != true) {
+        throw Exception(data['error']?.toString() ?? 'The Google Drive copy could not be deleted.');
+      }
+      if (mounted) {
+        setState(() => _status =
+            'Your Google Drive copy was deleted. The original video on your phone is untouched. This account’s one-video slot remains used.');
+      }
+      await _loadOrder();
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Delete: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _notificationDate(dynamic value) {
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    if (parsed == null) return '';
+    final local = parsed.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year}';
+  }
+
   Future<void> _openLegal(String document) async {
     final uri = Uri.parse('https://github.com/yuv693/wedding-video-share/blob/main/docs/$document');
     await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -287,6 +358,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextStyle(fontSize: 23, height: 1.2, fontWeight: FontWeight.w800, color: burgundy)),
                   const SizedBox(height: 8),
                   Text(user?.email ?? user?.phone ?? 'Your account'),
+                  const SizedBox(height: 8),
+                  const Text('One wedding. One video. Your own Drive.',
+                    style: TextStyle(color: Color(0xFF66575B), fontSize: 13)),
                 ]),
               ),
               const SizedBox(height: 18),
@@ -295,7 +369,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('1. Connect your Google Drive', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  Text(_driveEmail == null ? 'Your video will be stored in your own Google Drive.' : 'Connected: $_driveEmail'),
+                  Text(_driveEmail == null
+                      ? 'Your video is stored in your own Google Drive. Wedding Video Share does not provide video storage.'
+                      : 'Connected to your Google Drive: $_driveEmail'),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: _busy || _uploading ? null : _connectDrive,
@@ -338,10 +414,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('3. Upload your wedding video', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  const Text('Choose one video up to 15 GB. It goes directly to your own Google Drive. Your phone original is not deleted.'),
+                  const Text('Choose one video up to 15 GB. It uploads to your own Google Drive; your phone original is never deleted. If the connection stops, choose the same file again to resume.'),
                   const SizedBox(height: 12),
                   if (videoReady)
                     Text('Uploaded: ${_video!['original_filename']} (${_bytes(_video!['file_size_bytes'])})')
+                  else if (videoDeleted)
+                    const Text('Your Google Drive copy was deleted by you. The phone original remains untouched; this one-video plan cannot be reused.')
                   else if (videoSlotUsed)
                     const Text('This account has already used its one video slot. Create a new account for another wedding video.')
                   else
@@ -353,9 +431,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   if (_uploading) ...[
                     const SizedBox(height: 14),
+                    const Text('Uploading to your Google Drive…', style: TextStyle(fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
                     LinearProgressIndicator(value: _uploadProgress),
                     const SizedBox(height: 6),
-                    Text('${(_uploadProgress * 100).toStringAsFixed(1)}% uploaded'),
+                    Text('${(_uploadProgress * 100).toStringAsFixed(1)}% uploaded · resumable 8 MB chunks'),
                   ],
                   if (!paid) const Text('Complete the ₹290 payment first.', style: TextStyle(color: Colors.black54)),
                   if (paid && _driveEmail == null) const Text('Connect Google Drive before uploading.', style: TextStyle(color: Colors.black54)),
@@ -369,7 +449,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Text('4. Share with your guests', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
-                    const Text('Create a private download link. The account is locked only after the download service verifies the full video transfer.'),
+                    const Text('Create a private download link and send the 6-digit password separately. Your Google Drive copy stays saved until you choose to delete it.'),
                     const SizedBox(height: 12),
                     OutlinedButton.icon(
                       onPressed: _busy || _uploading ? null : _makeShareLink,
@@ -396,9 +476,71 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: FilledButton.styleFrom(backgroundColor: burgundy),
                       ),
                     ],
+                    const SizedBox(height: 14),
+                    OutlinedButton.icon(
+                      onPressed: _busy || _uploading ? null : _deleteDriveCopy,
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('Delete my Google Drive copy'),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Only the Drive copy is deleted. Your phone original is not touched.',
+                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                    ),
                   ]),
                 )),
               ],
+              if (videoDeleted) ...[
+                const SizedBox(height: 12),
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.delete_sweep_outlined, color: burgundy),
+                    title: const Text('Drive copy deleted'),
+                    subtitle: const Text('Your phone original remains untouched. This account’s one-video plan stays used.'),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.notifications_active_outlined, color: burgundy),
+                          SizedBox(width: 8),
+                          Text('Guest download updates', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_notifications.isEmpty)
+                        const Text('When your guest finishes the full video transfer, a completion update will appear here.')
+                      else
+                        for (final notification in _notifications)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              notification['notification_type'] == 'receiver_download_completed'
+                                  ? Icons.check_circle_rounded
+                                  : Icons.notifications_none_rounded,
+                              color: notification['notification_type'] == 'receiver_download_completed'
+                                  ? Colors.green
+                                  : burgundy,
+                            ),
+                            title: Text(notification['title']?.toString() ?? 'Account update',
+                                style: const TextStyle(fontWeight: FontWeight.w700)),
+                            subtitle: Text(notification['message']?.toString() ?? ''),
+                            trailing: Text(
+                              _notificationDate(notification['created_at']),
+                              style: const TextStyle(fontSize: 10, color: Colors.black54),
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
+              ),
               if (_status != null) ...[
                 const SizedBox(height: 12),
                 Container(
