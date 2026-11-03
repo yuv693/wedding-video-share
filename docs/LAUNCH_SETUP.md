@@ -10,7 +10,7 @@ In Supabase Dashboard:
 1. Keep Authentication → Sign In / Providers → Anonymous Sign-Ins enabled.
 2. Enable manual identity linking so an anonymous customer can attach a verified email without changing the customer's UUID or losing the order.
 3. Enable the Email provider.
-4. In Authentication → Email Templates → Magic Link, use the OTP token variable {{ .Token }} in the email body. The app collects a six-digit code; a template that sends only {{ .ConfirmationURL }} sends a link instead.
+4. In Authentication → Email Templates → Email Change, use {{ .Token }} so the account-linking screen receives a six-digit email-change code. In Authentication → Email Templates → Magic Link, also use {{ .Token }} so account recovery sends a six-digit sign-in code. Templates that send only {{ .ConfirmationURL }} send links instead of the codes expected by these screens.
 5. Configure production SMTP and test delivery, spam-folder handling, resend limits and OTP expiry.
 6. Test Get Started → Account → Protect your account → verify email → pay → reinstall on a test device → Recover account. Confirm the original order and video remain.
 
