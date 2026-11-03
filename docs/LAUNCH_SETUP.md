@@ -2,13 +2,14 @@
 
 This checklist is for the publisher. Do not put provider secrets in source code, GitHub files, screenshots or chat.
 
-## 1. Supabase email OTP
+## 1. Supabase email OTP and SMTP
 
 1. Open the WeddingVideoShare project in Supabase.
-2. Go to **Authentication → Email Templates**.
-3. Open the Magic Link template.
-4. Change the message so it displays the numeric token using `{{ .Token }}` (not only a confirmation link).
-5. Save and test sign-in with an email address you control.
+2. Go to **Authentication → Emails → SMTP Settings** and configure a custom SMTP provider before public use. The built-in email service is intended for trying Auth: it has a strict project-wide hourly limit and only sends to organization team-member addresses.
+3. Enter the SMTP host, port, username, password and sender address supplied by your email provider. Keep these credentials only in the Supabase dashboard; never put them in GitHub files or chat.
+4. Go to **Authentication → Email Templates** and open the Magic Link template.
+5. Ensure the email includes the numeric token variable `{{ .Token }}`, because the app supports entering a code as well as opening the email link.
+6. Save and test sign-in with an email address you control. If you need a higher send rate, review **Authentication → Rate Limits** after custom SMTP is configured.
 
 ## 2. Supabase phone OTP
 
