@@ -51,10 +51,8 @@ int _acceptedOffset(String? range) {
 }
 
 class VideoUploadResult {
-  const VideoUploadResult({required this.shareUrl, required this.fileName, required this.downloadPin});
-  final String shareUrl;
+  const VideoUploadResult({required this.fileName});
   final String fileName;
-  final String downloadPin;
 }
 
 class VideoUploadService {
@@ -203,17 +201,7 @@ class VideoUploadService {
       throw Exception(finalData['error']?.toString() ?? 'The uploaded file could not be verified.');
     }
 
-    final share = await supabase.functions.invoke('wedding-share', body: {
-      'action': 'create_share',
-      'orderId': orderId,
-    });
-    final shareData = _asMap(share.data);
-    final shareUrl = shareData['shareUrl']?.toString();
-    final downloadPin = shareData['downloadPin']?.toString();
-    if (share.status != 200 || shareData['ok'] != true || shareUrl == null || downloadPin == null) {
-      throw Exception(shareData['error']?.toString() ?? 'Video uploaded, but the private share link could not be created.');
-    }
-    return VideoUploadResult(shareUrl: shareUrl, fileName: file.name, downloadPin: downloadPin);
+    return VideoUploadResult(fileName: file.name);
   }
 
   Future<Map<String, dynamic>> _openOrResumeSession({
