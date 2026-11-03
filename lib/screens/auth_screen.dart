@@ -1,91 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
 
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key, this.onBack});
+  const AuthScreen({super.key});
 
-  final VoidCallback? onBack;
   @override
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  final _identity = TextEditingController();
-  final _otp = TextEditingController();
-  bool _usePhone = false, _codeSent = false, _busy = false;
-  String? _message, _error;
+  bool _busy = false;
+  String? _error;
 
-  @override
-  void dispose() { _identity.dispose(); _otp.dispose(); super.dispose(); }
-
-  Future<void> _openLegal(String document) async {
-    final uri = Uri.parse('https://github.com/yuv693/wedding-video-share/blob/main/docs/$document');
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
-  String get _normalizedPhone {
-    final value = _identity.text.trim().replaceAll(RegExp(r'[^0-9+]'), '');
-    if (value.startsWith('+')) return value;
-    if (value.length == 10) return '+91$value';
-    return '+$value';
-  }
-
-  Future<void> _sendCode() async {
-    final value = _identity.text.trim();
-    if (value.isEmpty) {
-      setState(() => _error = _usePhone ? 'Enter your mobile number.' : 'Enter your email address.');
-      return;
-    }
-    setState(() { _busy = true; _error = null; _message = null; });
+  Future<void> _connectGoogleAccount() async {
+    setState(() { _busy = true; _error = null; });
     try {
-      if (_usePhone) {
-        await supabase.auth.signInWithOtp(phone: _normalizedPhone, shouldCreateUser: true);
-      } else {
-        await supabase.auth.signInWithOtp(
-          email: value,
-          shouldCreateUser: true,
-          emailRedirectTo: 'weddingvideoshare://login-callback',
-        );
-      }
-      if (!mounted) return;
-      setState(() {
-        _codeSent = true;
-        _message = _usePhone
-            ? 'Verification code sent by SMS. Enter the code below.'
-            : 'Login link sent. Open it from your email on this phone. If your email contains a code instead, enter it below.';
-      });
-    } on AuthException catch (e) {
-      if (mounted) {
-        final message = e.message.toLowerCase();
-        setState(() => _error = message.contains('rate limit') || message.contains('too many')
-            ? 'Email sending is temporarily limited. Please wait before trying again.'
-            : e.message);
-      }
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Could not send the code. Please try again.');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _verifyCode() async {
-    final code = _otp.text.trim();
-    if (code.length < 4) { setState(() => _error = 'Enter the verification code.'); return; }
-    setState(() { _busy = true; _error = null; _message = null; });
-    try {
-      await supabase.auth.verifyOTP(
-        type: _usePhone ? OtpType.sms : OtpType.email,
-        token: code,
-        email: _usePhone ? null : _identity.text.trim(),
-        phone: _usePhone ? _normalizedPhone : null,
+      await supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: 'weddingvideoshare://login-callback',
+        scopes: 'openid email profile',
       );
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'Verification failed. Please check the code and try again.');
+      if (mounted) setState(() => _error = 'Google account could not be connected. Please try again.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -95,93 +35,64 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     const burgundy = Color(0xFF6F2438);
     return Scaffold(
+      backgroundColor: const Color(0xFFFFFCF8),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFFFFCF8),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+        ),
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 460),
+              constraints: const BoxConstraints(maxWidth: 420),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (widget.onBack != null)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        onPressed: _busy ? null : widget.onBack,
-                        icon: const Icon(Icons.arrow_back_rounded, color: burgundy),
-                        tooltip: 'Back',
-                      ),
-                    ),
-                  const Icon(Icons.favorite_rounded, size: 54, color: burgundy),
-                  const SizedBox(height: 18),
-                  const Text('Welcome back', textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: burgundy)),
-                  const SizedBox(height: 8),
-                  const Text('Sign in to share your wedding memories. We will send a secure code or login link.',
-                    textAlign: TextAlign.center, style: TextStyle(color: Colors.black54, height: 1.4)),
+                  const Icon(Icons.cloud_done_rounded, size: 68, color: burgundy),
+                  const SizedBox(height: 22),
+                  const Text(
+                    'Connect your Google Account',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 26, height: 1.2, fontWeight: FontWeight.w800, color: burgundy),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Use one Google account to create your customer profile. You will choose Google Drive access for your wedding video in the next step.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFF66575B), height: 1.5),
+                  ),
                   const SizedBox(height: 28),
-                  SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment(value: false, label: Text('Email'), icon: Icon(Icons.email_outlined)),
-                      ButtonSegment(value: true, label: Text('Phone'), icon: Icon(Icons.phone_android)),
-                    ],
-                    selected: {_usePhone},
-                    onSelectionChanged: _busy ? null : (v) => setState(() {
-                      _usePhone = v.first; _codeSent = false; _otp.clear(); _error = null; _message = null;
-                    }),
-                  ),
-                  const SizedBox(height: 18),
-                  TextField(
-                    controller: _identity,
-                    enabled: !_codeSent && !_busy,
-                    keyboardType: _usePhone ? TextInputType.phone : TextInputType.emailAddress,
-                    autofillHints: _usePhone ? const [AutofillHints.telephoneNumber] : const [AutofillHints.email],
-                    decoration: InputDecoration(
-                      labelText: _usePhone ? 'Mobile number' : 'Email address',
-                      hintText: _usePhone ? '9876543210' : 'you@example.com',
-                      prefixIcon: Icon(_usePhone ? Icons.phone : Icons.mail_outline),
-                      border: const OutlineInputBorder(),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _connectGoogleAccount,
+                    icon: const Icon(Icons.g_mobiledata_rounded, size: 30),
+                    label: const Text('Continue with Google'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: burgundy,
+                      side: const BorderSide(color: Color(0xFFD9C5C0)),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                   ),
-                  if (_codeSent) ...[
-                    const SizedBox(height: 14),
-                    TextField(controller: _otp, keyboardType: TextInputType.number, maxLength: 8,
-                      decoration: const InputDecoration(labelText: 'Verification code',
-                        prefixIcon: Icon(Icons.lock_outline), border: OutlineInputBorder())),
-                  ],
-                  if (_message != null) ...[
-                    const SizedBox(height: 12),
-                    Text(_message!, style: const TextStyle(color: Colors.green), textAlign: TextAlign.center),
+                  if (_busy) ...[
+                    const SizedBox(height: 18),
+                    const Center(child: CircularProgressIndicator(color: burgundy)),
+                    const SizedBox(height: 8),
+                    const Text('Opening secure Google sign-in…', textAlign: TextAlign.center),
                   ],
                   if (_error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(_error!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
                   ],
-                  const SizedBox(height: 18),
-                  FilledButton(
-                    onPressed: _busy ? null : (_codeSent ? _verifyCode : _sendCode),
-                    style: FilledButton.styleFrom(backgroundColor: burgundy, padding: const EdgeInsets.symmetric(vertical: 16)),
-                    child: _busy
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : Text(_codeSent ? 'Verify and continue' : 'Send verification code'),
-                  ),
-                  if (_codeSent)
-                    TextButton(onPressed: _busy ? null : () => setState(() {
-                      _codeSent = false; _otp.clear(); _message = null;
-                    }), child: const Text('Change email or phone number')),
-                  const SizedBox(height: 12),
-                  const Text('No password is needed. Use an email address or mobile number you can access.',
-                    textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.black45)),
-                  const SizedBox(height: 12),
-                  const Text('By continuing, you agree to the service terms and privacy policy.',
-                    textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Colors.black45)),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    children: [
-                      TextButton(onPressed: () => _openLegal('privacy-policy.md'), child: const Text('Privacy Policy')),
-                      TextButton(onPressed: () => _openLegal('terms-of-service.md'), child: const Text('Terms of Service')),
-                    ],
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Your Google account identifies your plan. Your video will be saved to the Google Drive account you authorize separately.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.black54, height: 1.45),
                   ),
                 ],
               ),
