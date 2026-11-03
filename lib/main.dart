@@ -5,12 +5,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/welcome_screen.dart';
 import 'services/backend.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(url: supabaseUrl, publishableKey: supabasePublishableKey);
+  await Supabase.initialize(
+    url: supabaseUrl,
+    publishableKey: supabasePublishableKey,
+  );
   runApp(const WeddingVideoShareApp());
 }
 
@@ -26,7 +28,10 @@ class WeddingVideoShareApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         scaffoldBackgroundColor: const Color(0xFFFFFCF8),
-        colorScheme: ColorScheme.fromSeed(seedColor: burgundy, brightness: Brightness.light),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: burgundy,
+          brightness: Brightness.light,
+        ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFFFFFCF8),
           foregroundColor: burgundy,
@@ -39,8 +44,11 @@ class WeddingVideoShareApp extends StatelessWidget {
   }
 }
 
+/// Opens sign-in immediately for signed-out customers.
+/// After Supabase confirms a session, the customer dashboard is shown.
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
+
   @override
   State<AuthGate> createState() => _AuthGateState();
 }
@@ -48,29 +56,26 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   StreamSubscription<AuthState>? _subscription;
   bool _signedIn = supabase.auth.currentSession != null;
-  bool _showWelcome = true;
 
   @override
   void initState() {
     super.initState();
     _subscription = supabase.auth.onAuthStateChange.listen((state) {
-      if (mounted) setState(() => _signedIn = state.session != null);
+      if (mounted) {
+        setState(() => _signedIn = state.session != null);
+      }
     });
   }
 
   @override
-  void dispose() { _subscription?.cancel(); super.dispose(); }
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     if (_signedIn) return const HomeScreen();
-    if (_showWelcome) {
-      return WelcomeScreen(onGetStarted: () {
-        if (mounted) setState(() => _showWelcome = false);
-      });
-    }
-    return AuthScreen(onBack: () {
-      if (mounted) setState(() => _showWelcome = true);
-    });
+    return const AuthScreen();
   }
 }
