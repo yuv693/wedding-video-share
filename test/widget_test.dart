@@ -13,10 +13,6 @@ void main() {
     var started = false;
     var recovering = false;
 
-    tester.view.physicalSize = const Size(1080, 1920);
-    tester.view.devicePixelRatio = 2;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(MaterialApp(
       home: WelcomeScreen(
@@ -44,10 +40,6 @@ void main() {
     var started = false;
     var recovering = false;
 
-    await tester.view.setPhysicalSize(const Size(1080, 1920));
-    await tester.view.setDevicePixelRatio(2);
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
 
     await tester.pumpWidget(MaterialApp(
       home: WelcomeScreen(
