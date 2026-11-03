@@ -62,7 +62,6 @@ class _AuthGateState extends State<AuthGate> {
   void dispose() { _subscription?.cancel(); super.dispose(); }
 
   @override
-  @override
   Widget build(BuildContext context) {
     if (_signedIn) return const HomeScreen();
     if (_showWelcome) {
