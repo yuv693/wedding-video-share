@@ -66,6 +66,32 @@ class _HomeScreenState extends State<HomeScreen> {
     return <String, dynamic>{};
   }
 
+  Future<void> _startNewWedding() async {
+    if (_order?['upload_locked'] != true) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Start another wedding?'),
+        content: const Text('This creates a separate customer account for a new wedding. The new account needs its own verified recovery email and a new ₹290 payment. Your completed wedding remains saved in the previous account.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Create new account')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await supabase.auth.signOut();
+      await supabase.auth.signInAnonymously();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not create a new wedding account: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _refresh() async {
     await _loadOrder();
     await _loadQuota();
@@ -544,6 +570,38 @@ class _HomeScreenState extends State<HomeScreen> {
               if (_selectedTab == 2) ...[
               const SizedBox(height: 12),
               AccountAccessCard(onLinked: _refresh),
+              if (_order?['upload_locked'] == true) ...[
+                const SizedBox(height: 12),
+                Card(
+                  color: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: const BorderSide(color: Color(0xFFEADFD9)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Ready for another celebration?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        const Text('Create a separate account for the next wedding. Your completed wedding stays saved in this account.'),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _busy ? null : _startNewWedding,
+                            icon: const Icon(Icons.add_rounded),
+                            label: const Text('Start another wedding'),
+                            style: FilledButton.styleFrom(backgroundColor: burgundy),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Card(
                 color: Colors.white,
