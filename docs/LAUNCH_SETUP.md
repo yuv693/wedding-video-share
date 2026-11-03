@@ -36,7 +36,14 @@ https://mnaswhizatnwfwmjmtvm.supabase.co/functions/v1/razorpay-payments/webhook
 4. Subscribe to payment.captured and payment.failed.
 5. Verify a test payment is marked paid only after the server receives the webhook. Use live keys only after this test passes.
 
-## 4. Android release signing and Play listing
+## 4. Receiver download Worker
+
+The Cloudflare Worker script is `wedding-video-download` on the `weddingvideoshare-ym` workers.dev subdomain. Its public receiver page is:
+https://wedding-video-download.weddingvideoshare-ym.workers.dev/
+
+Keep the `DOWNLOAD_WORKER_SECRET` binding configured on that Worker. The Supabase `wedding-share` function redirects paid, valid share links to this exact Worker URL.
+
+## 5. Android release signing and Play listing
 
 - Android application ID: com.weddingvideoshare.app.
 - Create a secure Android upload keystore and keep it outside the repository.
@@ -46,7 +53,7 @@ https://mnaswhizatnwfwmjmtvm.supabase.co/functions/v1/razorpay-payments/webhook
 - Publish the privacy policy and terms at stable public HTTPS URLs. Add a monitored support email/address to both documents and the Play listing.
 - Complete screenshots, app icon, content rating, Data safety, target audience and app-access disclosures.
 
-## 5. Real-device acceptance tests
+## 6. Real-device acceptance tests
 
 - Link and verify a recovery email, then recover the same account after app data is cleared or the app is reinstalled.
 - Test Google Drive OAuth, account email and quota.
