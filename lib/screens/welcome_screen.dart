@@ -4,11 +4,13 @@ class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({
     super.key,
     required this.onGetStarted,
+    this.onRecoverAccount,
     this.busy = false,
     this.error,
   });
 
   final VoidCallback onGetStarted;
+  final VoidCallback? onRecoverAccount;
   final bool busy;
   final String? error;
 
@@ -110,6 +112,13 @@ class WelcomeScreen extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Text('Get Started'),
                   ),
+                  if (onRecoverAccount != null) ...[
+                    const SizedBox(height: 10),
+                    TextButton(
+                      onPressed: busy ? null : onRecoverAccount,
+                      child: const Text('Already have an account? Recover it'),
+                    ),
+                  ],
                   if (error != null) ...[
                     const SizedBox(height: 12),
                     Text(error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
