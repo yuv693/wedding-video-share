@@ -368,28 +368,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Card(child: Padding(
                 padding: const EdgeInsets.all(18),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('1. Connect your Google Drive', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 8),
-                  Text(_driveEmail == null
-                      ? 'Your video is stored in your own Google Drive. Wedding Video Share does not provide video storage.'
-                      : 'Connected to your Google Drive: $_driveEmail'),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: _busy || _uploading ? null : _connectDrive,
-                    icon: const Icon(Icons.add_link),
-                    label: Text(_driveEmail == null ? 'Connect Google Drive' : 'Reconnect Google Drive'),
-                  ),
-                  if (_quota != null) ...[
-                    const SizedBox(height: 8),
-                    Text('Drive used: ${_bytes(_quota!['usedBytes'])}  •  Available: ${_quota!['availableBytes'] == null ? 'Not reported' : _bytes(_quota!['availableBytes'])}'),
-                  ],
-                ]),
-              )),
-              const SizedBox(height: 12),
-              Card(child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('2. One wedding video plan', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const Text('1. One wedding video plan', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
                   const Text('₹290 • One account • One video upload and share cycle'),
                   const Text('Maximum video size: 15 GB (decimal).'),
@@ -406,6 +385,27 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(height: 8),
                     Text('Order status: ${_order!['payment_status'] ?? 'pending'}'),
                     if (locked) const Text('This account has completed its video cycle.'),
+                  ],
+                ]),
+              )),
+              const SizedBox(height: 12),
+              Card(child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('2. Connect your Google Drive', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  Text(_driveEmail == null
+                      ? 'Your video is stored in your own Google Drive. Wedding Video Share does not provide video storage.'
+                      : 'Connected to your Google Drive: $_driveEmail'),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _busy || _uploading ? null : _connectDrive,
+                    icon: const Icon(Icons.add_link),
+                    label: Text(_driveEmail == null ? 'Connect Google Drive' : 'Reconnect Google Drive'),
+                  ),
+                  if (_quota != null) ...[
+                    const SizedBox(height: 8),
+                    Text('Drive used: ${_bytes(_quota!['usedBytes'])}  •  Available: ${_quota!['availableBytes'] == null ? 'Not reported' : _bytes(_quota!['availableBytes'])}'),
                   ],
                 ]),
               )),
