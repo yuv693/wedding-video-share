@@ -5,7 +5,7 @@ Flutter Android app for private wedding-video sharing.
 ## Product rules
 - One customer account is for exactly one wedding video upload/share cycle.
 - The video upload is free; ₹290 is charged only when the customer chooses to share.
-- Maximum video size: 40,000,000,000 bytes (40 GB decimal).
+- Maximum video size: 40,000,000,000 bytes (40 GB decimal); actual upload is also limited by available Google Drive quota.
 - The video is stored in the customer's own Google Drive.
 - The app never deletes the original video from the phone.
 - Upload locks only after the server verifies the full receiver transfer.
@@ -15,13 +15,13 @@ Flutter Android app for private wedding-video sharing.
 1. Welcome page creates a private Supabase anonymous customer session. No Supabase Google sign-in is used.
 2. Customer adds and verifies a recovery email before uploading or paying.
 3. Customer connects Google Drive separately using Drive OAuth.
-4. Customer uploads one video (up to 40 GB) to their own Drive using resumable upload.
-5. After upload, the customer taps **Share Video – Pay ₹290**.
-6. Razorpay payment is not treated as paid until the server verifies its webhook.
-7. Only after payment verification, the app creates a private receiver link and six-digit PIN.
-8. The receiver enters the PIN and downloads the video. The server verifies the full streamed byte count.
-9. The customer receives a completion notification; the upload slot is locked.
-10. The customer may manually delete the Drive copy. The app does not delete it automatically.
+4. Customer uploads one video to their own Drive using resumable upload.
+5. Before sharing, the customer explicitly consents to deletion of the Drive copy after a complete server-verified receiver transfer.
+6. After upload, the customer taps **Share Video – Pay ₹290**.
+7. Razorpay payment is not treated as paid until the server verifies its webhook.
+8. Only after payment verification, the app creates a private receiver link and six-digit PIN.
+9. The receiver enters the PIN and downloads the video. The server verifies the full streamed byte count.
+10. After a complete verified transfer, the upload slot is locked. The Drive copy is deleted only if the customer gave explicit consent; otherwise it is retained.
 
 ## Implementation status
 These are implemented UI/code paths, not proof that every third-party integration or the complete journey has passed real-device testing.
@@ -48,7 +48,7 @@ These are draft documents. Add a monitored support contact, publish stable publi
 - Configure the separate Google Drive OAuth client and verify the Drive callback on Android.
 - Replace the Google token-encryption secret with a fresh random 32-byte base64 key before real customers connect Google Drive.
 - Configure Razorpay test keys and webhook, then run a verified test payment.
-- Test Google sign-in is not used for customer identity; test Google Drive OAuth, large-file upload/resume, guest download and upload-lock behavior on real Android devices.
+- Test Google Drive OAuth, large-file upload/resume, guest download, consent-based deletion and upload-lock behavior on real Android devices.
 - Configure Android release signing, Play Store listing, privacy policy and terms.
 
 ## Build
