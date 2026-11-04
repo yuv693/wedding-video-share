@@ -107,12 +107,12 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _order = row);
       if (row != null) {
         final video = await supabase.from('wedding_videos')
-          .select('id,original_filename,file_size_bytes,upload_status,google_drive_account_email,deleted_at')
+          .select('id,original_filename,file_size_bytes,upload_status,google_drive_account_email,deleted_at,auto_delete_consent_at')
           .eq('order_id', row['id'])
           .maybeSingle();
-        if (mounted) setState(() => _video = video);
+        if (mounted) setState(() { _video = video; _autoDeleteConsent = video?['auto_delete_consent_at'] != null; });
       } else {
-        setState(() => _video = null);
+        setState(() { _video = null; _autoDeleteConsent = false; });
       }
     } catch (_) {
       if (mounted) setState(() => _status = 'Account status could not be loaded. Pull down to refresh.');
@@ -165,6 +165,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _startPayment() async {
+    if (!_autoDeleteConsent) {
+      if (mounted) setState(() => _status = 'Please confirm automatic Google Drive deletion after the receiver’s full verified download before payment.');
+      return;
+    }
     if (_video?['upload_status'] != 'uploaded' || _order == null) {
       setState(() => _status = 'Upload your wedding video first. Payment is needed when you share it.');
       return;
@@ -283,6 +287,28 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _updateAutoDeleteConsent(bool consent) async {
+    if (_video == null || _video!['id'] == null) return;
+    final previous = _autoDeleteConsent;
+    setState(() { _autoDeleteConsent = consent; _status = null; });
+    try {
+      final response = await supabase.functions.invoke('google-drive-storage', body: {
+        'action': 'set_auto_delete_consent',
+        'videoId': _video!['id'],
+        'consent': consent,
+      });
+      final data = _map(response.data);
+      if (response.status != 200 || data['ok'] != true) {
+        throw Exception(data['error']?.toString() ?? 'Could not update automatic deletion consent.');
+      }
+      if (mounted) setState(() => _status = consent
+        ? 'Automatic Google Drive deletion is enabled after the receiver’s full verified download.'
+        : 'Automatic Google Drive deletion consent has been withdrawn. Your Drive copy will be kept.');
+    } catch (e) {
+      if (mounted) setState(() { _autoDeleteConsent = previous; _status = 'Consent update: $e'; });
     }
   }
 
@@ -551,14 +577,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
                       value: _autoDeleteConsent,
-                      onChanged: _busy || _uploading ? null : (value) => setState(() => _autoDeleteConsent = value == true),
+                      onChanged: _busy || _uploading ? null : (value) => unawaited(_updateAutoDeleteConsent(value == true)),
                       controlAffinity: ListTileControlAffinity.leading,
                       title: const Text('I agree: automatically delete my Google Drive video after the receiver’s full download is verified.'),
                       subtitle: const Text('Only the Google Drive copy is deleted. The original on your phone is not touched. If the download is interrupted or cannot be verified, the Drive copy is kept.'),
                     ),
                     if (!paid)
                       FilledButton.icon(
-                        onPressed: _busy || _uploading ? null : _startPayment,
+                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _startPayment,
                         icon: const Icon(Icons.lock_open_rounded),
                         label: const Text('Share Video – Pay ₹290'),
                         style: FilledButton.styleFrom(backgroundColor: burgundy),
