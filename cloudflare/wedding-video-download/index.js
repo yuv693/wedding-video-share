@@ -1,5 +1,5 @@
 function safeFilename(value) {
-  const cleaned = String(value || "wedding-video").replace(/[\\r\\n"]/g, "_").replace(/[^\\w. ()-]/g, "_").slice(0, 180);
+  const cleaned = String(value || "wedding-video").replace(/[\r\n"]/g, "_").replace(/[^\w. ()-]/g, "_").slice(0, 180);
   return cleaned || "wedding-video";
 }
 async function control(env, payload) {
