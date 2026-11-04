@@ -10,6 +10,7 @@ Android application ID: `com.weddingvideoshare.app`
 - Client security rules allow a customer to read only their own account/order/video/notification/payment records.
 - Clients cannot write payment status, upload locks, video metadata, share links, download verification or audit events. Those writes must be made by trusted Cloud Functions.
 - Callable functions currently provide customer bootstrap, one-order-per-account preparation, account-state retrieval and consent updates.
+- Firebase Razorpay endpoints now include `createRazorpayOrder`, `verifyRazorpayPayment` and the `razorpayWebhook` HTTP endpoint. They enforce ₹290 (29,000 paise), INR, owner-bound gateway orders, explicit Drive auto-delete consent, HMAC payment-signature validation, server-side Razorpay captured-status lookup and idempotent Firestore payment updates. These endpoints are code only until secrets are configured and the backend is deployed.
 
 ## Important: staged migration, not cutover
 
@@ -22,9 +23,9 @@ The Firebase functions in this branch are the first server-side Firestore layer;
 1. Confirm Authentication providers: Anonymous and Email/Password. Enable Phone only if phone sign-in is intended.
 2. Create/confirm the Cloud Firestore database in production mode. Choose `asia-south1` (Mumbai) for the database location before creating it; Firestore database location cannot be changed later. Callable Functions are configured for `asia-south1` too.
 3. Deploy Firestore rules and Cloud Functions from this repository using Firebase CLI.
-4. Configure Google Drive OAuth client ID/secret, 32-byte token-encryption key, Razorpay key ID/secret and webhook secret as server-side Firebase secrets. Never put these values in the Android app, GitHub source, or chat.
+4. Configure server-side Firebase secrets before deploying payment/Drive endpoints. For Razorpay set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET` using `firebase functions:secrets:set SECRET_NAME` from a trusted terminal. In the Razorpay dashboard, add the deployed `razorpayWebhook` HTTPS endpoint and subscribe to `payment.captured` (and optionally `payment.failed`). For Google Drive set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` and a randomly generated 32-byte base64 `GOOGLE_TOKEN_ENCRYPTION_KEY`. Never put these values in the Android app, GitHub source, or chat.
 5. Firebase Functions deployment may require the Blaze billing plan. Set budget alerts before enabling production functions.
-6. Test anonymous account creation, account linking/recovery, owner-only reads, payment webhook verification, Drive OAuth/resumable upload, share PIN, full-byte download verification, and consent-based Drive deletion before cutover.
+6. Test anonymous account creation, account linking/recovery, owner-only reads, Razorpay order creation + captured-payment signature + webhook replay, Drive OAuth/resumable upload, share PIN, full-byte download verification, and consent-based Drive deletion before cutover.
 
 The Android build workflow compiles the Firebase Functions TypeScript source. The separate manual deployment workflow requires the GitHub secret above. Functions deployment can require the Firebase project to be on the Blaze billing plan; set a budget alert first.
 
