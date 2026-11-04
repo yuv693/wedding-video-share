@@ -165,10 +165,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _startPayment() async {
-    if (!_autoDeleteConsent) {
-      if (mounted) setState(() => _status = 'Please confirm automatic Google Drive deletion after the receiver’s full verified download before payment.');
-      return;
-    }
     if (_video?['upload_status'] != 'uploaded' || _order == null) {
       setState(() => _status = 'Upload your wedding video first. Payment is needed when you share it.');
       return;
@@ -314,25 +310,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _makeShareLink() async {
     if (_order == null || _video?['upload_status'] != 'uploaded') return;
-    if (!_autoDeleteConsent) {
-      if (mounted) setState(() => _status = 'Please confirm automatic deletion of the Google Drive copy after the receiver completes the full download.');
-      return;
-    }
     if (_order?['payment_status'] != 'paid') {
       await _startPayment();
       return;
     }
     setState(() { _busy = true; _status = null; });
     try {
-      final consentResponse = await supabase.functions.invoke('google-drive-storage', body: {
-        'action': 'set_auto_delete_consent',
-        'videoId': _video!['id'],
-        'consent': true,
-      });
-      final consentData = _map(consentResponse.data);
-      if (consentResponse.status != 200 || consentData['ok'] != true) {
-        throw Exception(consentData['error']?.toString() ?? 'Could not save automatic deletion consent.');
-      }
       final response = await supabase.functions.invoke('wedding-share', body: {
         'action': 'create_share',
         'orderId': _order!['id'],
