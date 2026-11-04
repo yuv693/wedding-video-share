@@ -5,7 +5,7 @@ Flutter Android app for private wedding-video sharing.
 ## Product rules
 - One customer account is for exactly one wedding video upload/share cycle.
 - The video upload is free; ₹290 is charged only when the customer chooses to share.
-- Maximum video size: 15,000,000,000 bytes (15 GB decimal).
+- Maximum video size: 40,000,000,000 bytes (40 GB decimal).
 - The video is stored in the customer's own Google Drive.
 - The app never deletes the original video from the phone.
 - Upload locks only after the server verifies the full receiver transfer.
@@ -15,7 +15,7 @@ Flutter Android app for private wedding-video sharing.
 1. Welcome page creates a private Supabase anonymous customer session. No Supabase Google sign-in is used.
 2. Customer adds and verifies a recovery email before uploading or paying.
 3. Customer connects Google Drive separately using Drive OAuth.
-4. Customer uploads one video (up to 15 GB) to their own Drive using resumable upload.
+4. Customer uploads one video (up to 40 GB) to their own Drive using resumable upload.
 5. After upload, the customer taps **Share Video – Pay ₹290**.
 6. Razorpay payment is not treated as paid until the server verifies its webhook.
 7. Only after payment verification, the app creates a private receiver link and six-digit PIN.
