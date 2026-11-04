@@ -147,7 +147,7 @@ export async function getGoogleDriveAccessToken(uid: string): Promise<{ accessTo
 const MAX_VIDEO_BYTES = 40_000_000_000;
 function safeFilename(value: unknown): string {
   const name = String(value ?? "").trim();
-  if (!name || name.length > 240 || /[\\\\/\\x00-\\x1f]/.test(name)) {
+  if (!name || name.length > 240 || /[\\/\\x00-\\x1f]/.test(name)) {
     throw new HttpsError("invalid-argument", "A valid video filename is required.");
   }
   return name;
