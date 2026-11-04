@@ -79,5 +79,8 @@ class FirebaseBackend {
     }, SetOptions(merge: true));
   }
 
+  static Future<void> sendPasswordResetEmail(String email) =>
+      auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
+
   static Future<void> signOut() => auth.signOut();
 }
