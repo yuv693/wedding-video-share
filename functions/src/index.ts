@@ -1,8 +1,10 @@
 import { initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { setGlobalOptions } from "firebase-functions/v2";
 
 initializeApp();
+setGlobalOptions({ region: "asia-south1" });
 const db = getFirestore();
 
 function wire(value: any): any {
@@ -19,7 +21,7 @@ function requireUid(request: { auth?: { uid: string } | null }): string {
   return uid;
 }
 
-export const bootstrapCustomer = onCall({ region: 'asia-south1' }, async (request) => {
+export const bootstrapCustomer = onCall(async (request) => {
   const uid = requireUid(request);
   const userRef = db.collection("customers").doc(uid);
   await db.runTransaction(async (tx) => {
