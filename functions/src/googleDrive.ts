@@ -354,3 +354,25 @@ export const finalizeGoogleDriveUpload = onRequest(
     }
   },
 );
+
+
+export const getGoogleDriveConnection = onRequest(
+  { region: "asia-south1" },
+  async (req, res) => {
+    try {
+      if (req.method !== "GET" && req.method !== "POST") {
+        res.status(405).json({ error: "GET_OR_POST_REQUIRED" }); return;
+      }
+      const uid = await bearerUid(req);
+      const snap = await db.collection("googleDriveConnections").doc(uid).get();
+      res.set("Cache-Control", "no-store").json({
+        ok: true,
+        connected: snap.exists,
+        email: snap.exists ? String(snap.get("googleEmail") ?? "") : null,
+      });
+    } catch (error) {
+      const status = error instanceof HttpsError && error.code === "unauthenticated" ? 401 : 500;
+      res.status(status).json({ error: error instanceof Error ? error.message : "DRIVE_CONNECTION_LOOKUP_FAILED" });
+    }
+  },
+);
