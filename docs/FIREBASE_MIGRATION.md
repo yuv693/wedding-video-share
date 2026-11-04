@@ -20,7 +20,7 @@ The Firebase functions in this branch are the first server-side Firestore layer;
 ## Firebase Console setup required
 
 1. Confirm Authentication providers: Anonymous and Email/Password. Enable Phone only if phone sign-in is intended.
-2. Create/confirm the Cloud Firestore database in production mode.
+2. Create/confirm the Cloud Firestore database in production mode. Choose `asia-south1` (Mumbai) for the database location before creating it; Firestore database location cannot be changed later. Callable Functions are configured for `asia-south1` too.
 3. Deploy Firestore rules and Cloud Functions from this repository using Firebase CLI.
 4. Configure Google Drive OAuth client ID/secret, 32-byte token-encryption key, Razorpay key ID/secret and webhook secret as server-side Firebase secrets. Never put these values in the Android app, GitHub source, or chat.
 5. Firebase Functions deployment may require the Blaze billing plan. Set budget alerts before enabling production functions.
