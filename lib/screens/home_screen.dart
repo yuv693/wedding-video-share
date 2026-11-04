@@ -239,19 +239,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _pollPaymentVerification() async {
-    for (var attempt = 0; attempt < 10; attempt++) {
-      await Future<void>.delayed(const Duration(seconds: 3));
-      if (!mounted) return;
-      await _loadOrder();
-      if (_order?['payment_status'] == 'paid') {
-        if (mounted) setState(() => _status = 'Payment verified. Creating your private share link…');
-        await _makeShareLink();
-        return;
-      }
-    }
-    if (mounted) setState(() => _status = 'Payment is still being confirmed. Tap Refresh in a moment.');
-  }
 
   void _onPaymentError(PaymentFailureResponse response) {
     if (mounted) setState(() => _status = 'Payment was not completed. Please try again.');
@@ -351,52 +338,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _deleteDriveCopy() async {
-    if (_video == null || _video!['id'] == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete your Google Drive copy?'),
-        content: const Text(
-          'This permanently deletes the Wedding Video Share copy from your own Google Drive. '
-          'The original video on your phone will not be touched. Your one-video plan will remain used.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Keep video'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6F2438)),
-            child: const Text('Delete Drive copy'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    setState(() { _busy = true; _status = null; });
-    try {
-      final response = await supabase.functions.invoke('google-drive-storage', body: {
-        'action': 'delete_video',
-        'videoId': _video!['id'],
-      });
-      final data = _map(response.data);
-      if (response.status != 200 || data['ok'] != true || data['deleted'] != true) {
-        throw Exception(data['error']?.toString() ?? 'The Google Drive copy could not be deleted.');
-      }
-      if (mounted) {
-        setState(() => _status =
-            'Your Google Drive copy was deleted. The original video on your phone is untouched. This account’s one-video slot remains used.');
-      }
-      await _loadOrder();
-    } catch (e) {
-      if (mounted) setState(() => _status = 'Delete: $e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
 
   String _notificationDate(dynamic value) {
     final parsed = DateTime.tryParse(value?.toString() ?? '');
