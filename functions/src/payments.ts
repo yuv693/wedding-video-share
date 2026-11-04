@@ -39,6 +39,7 @@ async function markPaymentPaid(uid: string, gatewayOrderId: string, paymentId: s
   await db.runTransaction(async (transaction) => {
     const txSnap = await transaction.get(txRef);
     const orderSnap = await transaction.get(orderRef);
+    const videoSnap = await transaction.get(db.collection("weddingVideos").doc(uid));
     if (!txSnap.exists || txSnap.get("customerUid") !== uid) {
       throw new HttpsError("not-found", "Payment order was not found for this account.");
     }
@@ -48,6 +49,12 @@ async function markPaymentPaid(uid: string, gatewayOrderId: string, paymentId: s
     if (txSnap.get("amountPaise") !== PRICE_PAISE || txSnap.get("currency") !== CURRENCY ||
         txSnap.get("gateway") !== "razorpay") {
       throw new HttpsError("failed-precondition", "Payment amount or currency does not match.");
+    }
+    if (!videoSnap.exists || videoSnap.get("customerUid") !== uid ||
+        videoSnap.get("uploadStatus") !== "uploaded" ||
+        !videoSnap.get("autoDeleteConsentAt") ||
+        orderSnap.get("uploadLocked") !== true) {
+      throw new HttpsError("failed-precondition", "Verified video upload and active Drive deletion consent are required before payment can be marked paid.");
     }
     if (txSnap.get("status") === "verified") return;
     transaction.update(txRef, {
