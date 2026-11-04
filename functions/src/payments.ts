@@ -90,6 +90,9 @@ export const createRazorpayOrder = onCall(
     if (videoQuery.empty || videoQuery.docs[0].get("uploadStatus") !== "uploaded") {
       throw new HttpsError("failed-precondition", "Upload and verify your wedding video before payment.");
     }
+    if (!videoQuery.docs[0].get("autoDeleteConsentAt")) {
+      throw new HttpsError("failed-precondition", "Confirm automatic Google Drive deletion after the receiver's full verified download before payment.");
+    }
     const existing = await db.collection("paymentTransactions")
       .where("customerUid", "==", uid).where("status", "==", "created")
       .orderBy("createdAt", "desc").limit(1).get();
