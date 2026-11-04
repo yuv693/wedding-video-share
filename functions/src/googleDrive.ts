@@ -271,7 +271,7 @@ export const resumeGoogleDriveUpload = onRequest(
         res.set("Cache-Control", "no-store").json({
           ok: true, filename: snap.get("filename"), mimeType: snap.get("mimeType"),
           expectedSizeBytes, resumeOffset: expectedSizeBytes, uploadComplete: true,
-          fileId: String(completed.id ?? ""),
+          completedFileId: String(completed.id ?? ""),
         });
         return;
       }
