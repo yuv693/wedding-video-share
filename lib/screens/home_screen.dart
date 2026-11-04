@@ -8,6 +8,7 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
+import '../services/firebase_backend.dart';
 import '../widgets/account_access_card.dart';
 import '../services/video_upload_service.dart';
 
@@ -66,6 +67,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return <String, dynamic>{};
   }
 
+  bool get _accountProtected {
+    final legacyUser = supabase.auth.currentUser;
+    final firebaseUser = FirebaseBackend.currentUser;
+    return legacyUser?.emailConfirmedAt != null &&
+        firebaseUser?.email != null &&
+        firebaseUser!.email!.toLowerCase() == legacyUser!.email?.toLowerCase();
+  }
+
   Future<void> _startNewWedding() async {
     if (_order?['upload_locked'] != true) return;
     final confirmed = await showDialog<bool>(
@@ -82,6 +91,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (confirmed != true || !mounted) return;
     try {
       await supabase.auth.signOut();
+      await FirebaseBackend.signOut();
+      await FirebaseBackend.signInAnonymouslyIfNeeded();
       await supabase.auth.signInAnonymously();
     } catch (e) {
       if (mounted) {
@@ -173,7 +184,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _status = 'Upload your wedding video first. Payment is needed when you share it.');
       return;
     }
-    if (supabase.auth.currentUser?.emailConfirmedAt == null) {
+    if (!_accountProtected) {
       setState(() { _selectedTab = 2; _status = 'Verify your recovery email before payment so you can recover this customer account later.'; });
       return;
     }
@@ -427,7 +438,7 @@ class _HomeScreenState extends State<HomeScreen> {
     const burgundy = Color(0xFF6F2438);
     final user = supabase.auth.currentUser;
     final paid = _order?['payment_status'] == 'paid';
-    final accountProtected = supabase.auth.currentUser?.emailConfirmedAt != null;
+    final accountProtected = _accountProtected;
     final locked = _order?['upload_locked'] == true;
     final videoReady = _video?['upload_status'] == 'uploaded';
     final videoDeleted = _video?['upload_status'] == 'deleted';
