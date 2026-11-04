@@ -98,6 +98,24 @@ Deno.serve((req) => {
       const admin = adminClient();
       const { accessToken, email, folderId: existingFolder } = await getGoogleAccessToken(admin, customerId);
 
+      if (body.action === "set_auto_delete_consent") {
+        const videoId = String(body.videoId ?? "");
+        const consent = body.consent === true;
+        if (!videoId) throw new Error("VIDEO_NOT_FOUND");
+        const { data: video, error } = await admin.from("wedding_videos")
+          .update({ auto_delete_consent_at: consent ? new Date().toISOString() : null })
+          .eq("id", videoId).eq("customer_id", customerId)
+          .eq("upload_status", "uploaded").is("deleted_at", null)
+          .select("id").maybeSingle();
+        if (error || !video) throw new Error("VIDEO_NOT_FOUND");
+        await admin.from("audit_events").insert({
+          actor_user_id: customerId,
+          event_type: consent ? "automatic_drive_deletion_consent_granted" : "automatic_drive_deletion_consent_revoked",
+          event_data: { video_id: videoId }
+        });
+        return json({ ok: true, consent });
+      }
+
       if (body.action === "resume_upload") {
         const { data: authData, error: authError } = await admin.auth.admin.getUserById(customerId);
         if (authError || !authData.user?.email_confirmed_at) {
