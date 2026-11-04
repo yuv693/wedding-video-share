@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/firebase_backend.dart';
+
 import '../services/backend.dart';
 
 class AccountAccessCard extends StatefulWidget {
@@ -15,6 +17,7 @@ class AccountAccessCard extends StatefulWidget {
 class _AccountAccessCardState extends State<AccountAccessCard> {
   final _email = TextEditingController();
   final _otp = TextEditingController();
+  final _password = TextEditingController();
   bool _sent = false;
   bool _signingBackIn = false;
   bool _busy = false;
@@ -25,6 +28,7 @@ class _AccountAccessCardState extends State<AccountAccessCard> {
   void dispose() {
     _email.dispose();
     _otp.dispose();
+    _password.dispose();
     super.dispose();
   }
 
@@ -34,6 +38,10 @@ class _AccountAccessCardState extends State<AccountAccessCard> {
 
   Future<void> _sendCode() async {
     final email = _email.text.trim().toLowerCase();
+    if (_password.text.length < 6) {
+      setState(() { _message = 'Create a password with at least 6 characters for secure Firebase account recovery.'; _error = true; });
+      return;
+    }
     if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(email)) {
       setState(() { _message = 'Enter a valid email address.'; _error = true; });
       return;
@@ -110,11 +118,39 @@ class _AccountAccessCardState extends State<AccountAccessCard> {
             : 'Verification was accepted. Refresh your account status to confirm the email.';
         _error = !confirmed;
       });
-      if (confirmed) widget.onLinked();
+      if (confirmed) {
+        await FirebaseBackend.linkCurrentAccountWithEmailPassword(
+          email: email,
+          password: _password.text,
+        );
+        if (!mounted) return;
+        setState(() => _message = 'Email verified and Firebase account secured. You can recover this account on another phone with this email and password.');
+        widget.onLinked();
+      }
     } on AuthException catch (e) {
       if (mounted) setState(() { _message = e.message; _error = true; });
     } catch (_) {
       if (mounted) setState(() { _message = 'Could not verify the code. Please try again.'; _error = true; });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _secureFirebaseAccount() async {
+    final email = _confirmedEmail;
+    if (email == null) return;
+    if (_password.text.length < 6) {
+      setState(() { _message = 'Enter a password with at least 6 characters.'; _error = true; });
+      return;
+    }
+    setState(() { _busy = true; _message = null; _error = false; });
+    try {
+      await FirebaseBackend.linkCurrentAccountWithEmailPassword(email: email, password: _password.text);
+      if (!mounted) return;
+      setState(() => _message = 'Firebase sign-in secured. Use this email and password when recovering your account on another phone.');
+      widget.onLinked();
+    } catch (e) {
+      if (mounted) setState(() { _message = 'Firebase account setup failed: $e'; _error = true; });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -143,9 +179,31 @@ class _AccountAccessCardState extends State<AccountAccessCard> {
             ]),
             const SizedBox(height: 8),
             if (email != null) ...[
-              const Text('Your recovery email is verified. Use this same email to sign in if you change or reset your phone.'),
+              const Text('Your recovery email is verified. Secure the Firebase sign-in too, so your Firestore account can be restored on another phone.'),
               const SizedBox(height: 8),
               Text(email, style: const TextStyle(fontWeight: FontWeight.w700, color: burgundy)),
+              if (FirebaseBackend.currentUser?.email == null) ...[
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _password,
+                  enabled: !_busy,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Create Firebase recovery password',
+                    prefixIcon: Icon(Icons.lock_outline),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(width: double.infinity, child: FilledButton(
+                  onPressed: _busy ? null : _secureFirebaseAccount,
+                  style: FilledButton.styleFrom(backgroundColor: burgundy),
+                  child: _busy ? const CircularProgressIndicator(color: Colors.white) : const Text('Secure Firebase account'),
+                )),
+              ] else ...[
+                const SizedBox(height: 8),
+                const Text('Firebase email/password recovery is already connected.', style: TextStyle(color: Colors.green)),
+              ],
             ] else ...[
               const Text('Verify an email address before uploading or paying. You can use it to recover this same customer account if you change or reset your phone.'),
               const SizedBox(height: 12),
@@ -158,6 +216,17 @@ class _AccountAccessCardState extends State<AccountAccessCard> {
                 decoration: const InputDecoration(
                   labelText: 'Your email address',
                   prefixIcon: Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _password,
+                enabled: !_busy && !_sent,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Create Firebase recovery password (min 6 characters)',
+                  prefixIcon: Icon(Icons.lock_outline),
                   border: OutlineInputBorder(),
                 ),
               ),
