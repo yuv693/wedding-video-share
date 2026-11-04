@@ -89,8 +89,9 @@ async function workerInternal(req: Request, body: Record<string, unknown>) {
   if(pinError||pinOk!==true)return json({error:"PIN_INVALID_OR_LOCKED"},403);
   const {data:o}=await admin.from("wedding_orders").select("id,customer_id,payment_status").eq("id",s.order_id).maybeSingle();
   if(!o||o.payment_status!=="paid")return json({error:"VIDEO_UNAVAILABLE"},404);
-  const {data:v}=await admin.from("wedding_videos").select("id,google_drive_file_id,original_filename,mime_type,file_size_bytes,upload_status").eq("order_id",o.id).maybeSingle();
+  const {data:v}=await admin.from("wedding_videos").select("id,google_drive_file_id,original_filename,mime_type,file_size_bytes,upload_status,auto_delete_consent_at").eq("order_id",o.id).maybeSingle();
   if(!v||v.upload_status!=="uploaded"||!v.google_drive_file_id)return json({error:"VIDEO_UNAVAILABLE"},404);
+  if(!v.auto_delete_consent_at)return json({error:"AUTO_DELETE_CONSENT_REQUIRED"},400);
   const {token}=await accessToken(admin,o.customer_id);
   const check=await driveFetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(v.google_drive_file_id)+"?fields=id,size,trashed",token);
   const meta=await check.json();
@@ -102,12 +103,28 @@ async function workerInternal(req: Request, body: Record<string, unknown>) {
  if(body.action==="worker_complete"){
   const id=String(body.downloadId??""),shareId=String(body.shareLinkId??""),bytes=Number(body.bytesTransferred??-1),done=body.completed===true;
   if(!/^[0-9a-f-]{36}$/i.test(id)||!/^[0-9a-f-]{36}$/i.test(shareId))return json({error:"DOWNLOAD_SESSION_NOT_FOUND"},404);
-  const {data:r}=await admin.from("receiver_downloads").select("id,bytes_expected").eq("id",id).eq("share_link_id",shareId).maybeSingle();
+  const {data:r}=await admin.from("receiver_downloads").select("id,bytes_expected,video_id,order_id,status").eq("id",id).eq("share_link_id",shareId).maybeSingle();
   if(!r)return json({error:"DOWNLOAD_SESSION_NOT_FOUND"},404);
   const valid=done&&Number.isSafeInteger(bytes)&&bytes===Number(r.bytes_expected),now=new Date().toISOString();
-  const {error}=await admin.from("receiver_downloads").update({status:valid?"completed":"interrupted",bytes_transferred:Math.max(0,Math.min(Number(r.bytes_expected),Number.isFinite(bytes)?bytes:0)),transfer_verified:valid,checksum_verified:false,completed_at:valid?now:null,verified_at:valid?now:null}).eq("id",id).eq("share_link_id",shareId).neq("status","completed");
-  if(error)return json({error:"DOWNLOAD_SESSION_UPDATE_FAILED"},500);
-  return json({ok:true,completed:valid});
+  if (r.status !== "completed") {
+   const {error}=await admin.from("receiver_downloads").update({status:valid?"completed":"interrupted",bytes_transferred:Math.max(0,Math.min(Number(r.bytes_expected),Number.isFinite(bytes)?bytes:0)),transfer_verified:valid,checksum_verified:false,completed_at:valid?now:null,verified_at:valid?now:null}).eq("id",id).eq("share_link_id",shareId);
+   if(error)return json({error:"DOWNLOAD_SESSION_UPDATE_FAILED"},500);
+  }
+  if (!valid && r.status !== "completed") return json({ok:true,completed:false,deleted:false});
+  const {data:video}=await admin.from("wedding_videos").select("id,customer_id,google_drive_file_id,upload_status,auto_delete_consent_at").eq("id",r.video_id).maybeSingle();
+  if (!video || !video.auto_delete_consent_at) return json({ok:true,completed:true,deleted:false,deleteReason:"CONSENT_NOT_FOUND"});
+  if (video.upload_status === "deleted" || !video.google_drive_file_id) return json({ok:true,completed:true,deleted:true});
+  try {
+   const {token}=await accessToken(admin,video.customer_id);
+   const del=await driveFetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(video.google_drive_file_id),token,{method:"DELETE"});
+   if (!del.ok && del.status !== 404) return json({ok:true,completed:true,deleted:false,deleteReason:"GOOGLE_DRIVE_DELETE_FAILED"});
+   const {error:saveError}=await admin.from("wedding_videos").update({upload_status:"deleted",deleted_at:now,google_drive_file_id:null,storage_path:null}).eq("id",video.id).eq("customer_id",video.customer_id);
+   if(saveError)return json({ok:true,completed:true,deleted:false,deleteReason:"DELETE_RECORD_UPDATE_FAILED"});
+   await admin.from("audit_events").insert({actor_user_id:video.customer_id,order_id:r.order_id,event_type:"google_drive_video_auto_deleted_after_verified_download",event_data:{video_id:video.id,download_id:id,bytes_transferred:bytes}});
+   return json({ok:true,completed:true,deleted:true});
+  } catch (_) {
+   return json({ok:true,completed:true,deleted:false,deleteReason:"GOOGLE_DRIVE_DELETE_FAILED"});
+  }
  }
  return json({error:"ACTION_NOT_SUPPORTED"},400);
 }
