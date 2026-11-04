@@ -276,7 +276,35 @@ export const resumeGoogleDriveUpload = onRequest(
         return;
       }
       if (probe.status === 404 || probe.status === 410) {
-        throw new HttpsError("failed-precondition", "Google Drive upload session expired. Start a new upload.");
+        // Google confirms the resumable session no longer exists. Clear only
+        // the matching, still-uploading Firestore reservation so the customer
+        // can safely select the video again. Never clear a finalized upload.
+        const videoRef = db.collection("weddingVideos").doc(uid);
+        const orderRef = db.collection("weddingOrders").doc(uid);
+        await db.runTransaction(async tx => {
+          const [freshSession, freshVideo, freshOrder] = await Promise.all([
+            tx.get(sessionRef), tx.get(videoRef), tx.get(orderRef),
+          ]);
+          if (freshSession.exists && freshSession.get("customerUid") === uid &&
+              freshSession.get("uploadUrl") === uploadUrl &&
+              freshVideo.exists && freshVideo.get("customerUid") === uid &&
+              freshVideo.get("uploadStatus") === "uploading" &&
+              freshOrder.exists && freshOrder.get("customerUid") === uid &&
+              freshOrder.get("uploadLocked") !== true) {
+            tx.delete(sessionRef);
+            tx.delete(videoRef);
+            tx.create(db.collection("auditEvents").doc(), {
+              actorUid: uid, orderId: uid,
+              eventType: "google_drive_upload_session_expired",
+              eventData: { expectedSizeBytes },
+              createdAt: FieldValue.serverTimestamp(),
+            });
+          }
+        });
+        throw new HttpsError(
+          "failed-precondition",
+          "The previous Google Drive upload session expired. Its incomplete reservation was cleared; choose the video again to restart.",
+        );
       }
       throw new HttpsError("unavailable", "Google Drive could not confirm the resumable upload position.");
     } catch (error) {
