@@ -53,6 +53,19 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
     }
   }
 
+  Future<void> _resetFirebasePassword() async {
+    final email = _email.text.trim().toLowerCase();
+    setState(() { _busy = true; _error = null; });
+    try {
+      await FirebaseBackend.sendPasswordResetEmail(email);
+      if (mounted) setState(() => _error = 'Firebase password reset email sent. Check your inbox, reset it, then return here.');
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not send password reset email: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _verifyCode() async {
     final email = _email.text.trim().toLowerCase();
     final code = _code.text.trim();
@@ -157,11 +170,16 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
                         ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : Text(_sent ? 'Recover account' : 'Send recovery code'),
                   ),
-                  if (_sent)
+                  if (_sent) ...[
                     TextButton(
                       onPressed: _busy ? null : _sendCode,
                       child: const Text('Resend code'),
                     ),
+                    TextButton(
+                      onPressed: _busy ? null : _resetFirebasePassword,
+                      child: const Text('Forgot Firebase password? Send reset email'),
+                    ),
+                  ],
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
