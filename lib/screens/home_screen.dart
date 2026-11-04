@@ -639,14 +639,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     if (!paid)
                       FilledButton.icon(
-                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _startPayment,
+                        onPressed: _busy || _uploading ? null : _startPayment,
                         icon: const Icon(Icons.lock_open_rounded),
                         label: const Text('Share Video – Pay ₹290'),
                         style: FilledButton.styleFrom(backgroundColor: burgundy),
                       )
                     else
                       OutlinedButton.icon(
-                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _makeShareLink,
+                        onPressed: _busy || _uploading ? null : _makeShareLink,
                         icon: const Icon(Icons.link),
                         label: const Text('Create / refresh private link'),
                       ),
