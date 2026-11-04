@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { defineSecret } from "firebase-functions/params";
@@ -13,6 +13,10 @@ const encryptionKey = defineSecret("GOOGLE_TOKEN_ENCRYPTION_KEY");
 const workerSecret = defineSecret("DOWNLOAD_WORKER_SECRET");
 const MAX_VIDEO_BYTES = 40_000_000_000;
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+function safeHexEqual(a: string, b: string): boolean {
+  if (!/^[a-f0-9]{64}$/.test(a) || !/^[a-f0-9]{64}$/.test(b)) return false;
+  return timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex"));
+}
 
 function requireUid(request: { auth?: { uid: string } | null }): string {
   const uid = request.auth?.uid;
@@ -77,8 +81,7 @@ export const weddingShareWorkerControl = onRequest(
     res.set("Cache-Control", "no-store");
     if (req.method !== "POST") { res.status(405).json({ error: "POST_REQUIRED" }); return; }
     const supplied = String(req.headers["x-download-worker-secret"] ?? "");
-    if (!supplied || supplied.length !== workerSecret.value().length ||
-        !Buffer.from(supplied).equals(Buffer.from(workerSecret.value()))) {
+    if (!supplied || !safeHexEqual(hash(supplied), hash(workerSecret.value()))) {
       res.status(401).json({ error: "WORKER_AUTH_FAILED" }); return;
     }
     try {
@@ -89,7 +92,6 @@ export const weddingShareWorkerControl = onRequest(
         if (!/^[a-f0-9]{64}$/.test(token) || !/^\d{6}$/.test(pin)) {
           res.status(400).json({ error: "SHARE_OR_PIN_INVALID" }); return;
         }
-        const shareRef = db.collection("shareLinks").doc();
         const shareQuery = await db.collection("shareLinks").where("tokenHash", "==", hash(token)).limit(1).get();
         if (shareQuery.empty) { res.status(404).json({ error: "SHARE_INVALID" }); return; }
         const shareDoc = shareQuery.docs[0];
@@ -100,7 +102,7 @@ export const weddingShareWorkerControl = onRequest(
           res.status(403).json({ error: "PIN_INVALID_OR_LOCKED" }); return;
         }
         const candidate = hash(token + ":" + pin);
-        if (candidate !== share.pinHash) {
+        if (!safeHexEqual(candidate, String(share.pinHash ?? ""))) {
           await db.runTransaction(async tx => {
             const fresh = await tx.get(shareDoc.ref);
             if (!fresh.exists || fresh.get("tokenHash") !== hash(token)) return;
