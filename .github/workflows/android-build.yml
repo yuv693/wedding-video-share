@@ -39,6 +39,15 @@ jobs:
       - name: Analyze Dart and Flutter code
         run: flutter analyze --no-pub
 
+      - name: Build Firebase Cloud Functions
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install and compile Firebase Functions
+        working-directory: functions
+        run: npm install --no-audit --no-fund && npm run build
+
       - name: Run Flutter tests
         run: flutter test --no-pub
 
