@@ -4,8 +4,8 @@ import 'package:wedding_video_share/screens/welcome_screen.dart';
 import 'package:wedding_video_share/services/video_upload_service.dart';
 
 void main() {
-  test('video upload limits remain 15 GB with 8 MB resumable chunks', () {
-    expect(maxVideoBytes, 15000000000);
+  test('video upload limit remains 40 GB with 8 MB resumable chunks', () {
+    expect(maxVideoBytes, 40000000000);
     expect(uploadChunkBytes, 8 * 1024 * 1024);
   });
 
