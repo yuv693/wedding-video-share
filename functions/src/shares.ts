@@ -35,9 +35,8 @@ export const createWeddingShare = onCall(async (request) => {
     throw new HttpsError("failed-precondition", "Verify the ₹290 payment before creating a share link.");
   }
   if (!video.exists || video.get("customerUid") !== uid ||
-      video.get("uploadStatus") !== "uploaded" || !video.get("googleDriveFileId") ||
-      !video.get("autoDeleteConsentAt")) {
-    throw new HttpsError("failed-precondition", "A verified video and active Drive deletion consent are required.");
+      video.get("uploadStatus") !== "uploaded" || !video.get("googleDriveFileId")) {
+    throw new HttpsError("failed-precondition", "A verified wedding video is required.");
   }
   const size = Number(video.get("fileSizeBytes"));
   if (!Number.isSafeInteger(size) || size <= 0 || size > MAX_VIDEO_BYTES) {
@@ -53,7 +52,7 @@ export const createWeddingShare = onCall(async (request) => {
     ]);
     if (!freshOrder.exists || freshOrder.get("paymentStatus") !== "paid" ||
         !freshVideo.exists || freshVideo.get("uploadStatus") !== "uploaded" ||
-        !freshVideo.get("autoDeleteConsentAt") || freshVideo.get("deletedAt")) {
+        freshVideo.get("deletedAt")) {
       throw new HttpsError("failed-precondition", "The wedding video is no longer eligible for sharing.");
     }
     tx.set(shareRef, {
@@ -121,7 +120,7 @@ export const weddingShareWorkerControl = onRequest(
         ]);
         if (!order.exists || order.get("paymentStatus") !== "paid" ||
             !video.exists || video.get("uploadStatus") !== "uploaded" ||
-            !video.get("autoDeleteConsentAt") || video.get("deletedAt")) {
+            video.get("deletedAt")) {
           res.status(404).json({ error: "VIDEO_UNAVAILABLE" }); return;
         }
         const expectedBytes = Number(video.get("fileSizeBytes"));
