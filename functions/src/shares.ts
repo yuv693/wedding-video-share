@@ -192,6 +192,17 @@ export const weddingShareWorkerControl = onRequest(
               completedAt: valid ? FieldValue.serverTimestamp() : null,
               verifiedAt: valid ? FieldValue.serverTimestamp() : null,
             });
+            if (valid) {
+              tx.create(db.collection("customerNotifications").doc(downloadId), {
+                customerUid: fresh.get("customerUid"),
+                orderId: fresh.get("orderId"),
+                sourceDownloadId: downloadId,
+                notificationType: "receiver_download_completed",
+                title: "Wedding video download completed",
+                message: "The server verified that the full video was streamed. Your Google Drive copy is deleted only if you gave consent; otherwise it remains saved.",
+                createdAt: FieldValue.serverTimestamp(),
+              });
+            }
           });
         }
         if (!valid && snap.get("status") !== "completed") {
