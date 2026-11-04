@@ -83,8 +83,11 @@ export const createRazorpayOrder = onCall(
     if (!orderSnap.exists || orderSnap.get("customerUid") !== uid) {
       throw new HttpsError("failed-precondition", "Prepare your wedding upload first.");
     }
-    if (orderSnap.get("uploadLocked") === true) {
-      throw new HttpsError("failed-precondition", "This account has already used its one wedding video.");
+    // The one-video slot is locked by the server after the upload is
+    // verified. That lock is expected here; it prevents another upload while
+    // allowing this already-uploaded video to be paid for and shared.
+    if (orderSnap.get("uploadLocked") !== true) {
+      throw new HttpsError("failed-precondition", "The wedding video upload has not been verified yet.");
     }
     if (orderSnap.get("paymentStatus") === "paid") {
       throw new HttpsError("already-exists", "Payment is already verified.");
