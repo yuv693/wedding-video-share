@@ -185,8 +185,8 @@ export const startGoogleDriveUpload = onRequest(
         throw new HttpsError("failed-precondition", "A new wedding upload is not available for this account.");
       }
       const existing = await db.collection("weddingVideos").where("customerUid", "==", uid).limit(1).get();
-      if (!existing.empty && existing.docs[0].get("uploadStatus") === "uploaded") {
-        throw new HttpsError("already-exists", "This account already has its one wedding video.");
+      if (!existing.empty) {
+        throw new HttpsError("already-exists", "An upload already exists for this account. Resume that upload instead of starting another.");
       }
       const { accessToken, email } = await getGoogleDriveAccessToken(uid);
       const metadata = { name: filename, mimeType, description: "Wedding Video Share upload for customer " + uid };
@@ -201,8 +201,8 @@ export const startGoogleDriveUpload = onRequest(
       await db.runTransaction(async tx => {
         const freshOrder = await tx.get(db.collection("weddingOrders").doc(uid));
         const freshVideo = await tx.get(videoRef);
-        if (!freshOrder.exists || freshOrder.get("uploadLocked") === true ||
-            (freshVideo.exists && freshVideo.get("uploadStatus") === "uploaded")) {
+        if (!freshOrder.exists || freshOrder.get("customerUid") !== uid ||
+            freshOrder.get("uploadLocked") === true || freshVideo.exists) {
           throw new HttpsError("failed-precondition", "This account is not eligible for another upload.");
         }
         tx.set(videoRef, {
