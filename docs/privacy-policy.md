@@ -17,7 +17,7 @@ This policy explains how Wedding Video Share handles information when you use th
 
 We use this information to authenticate your account, connect to the Google Drive account you choose, upload your selected video to a Wedding Video Share folder in that Drive, create a private guest link, process the ₹290 payment, stream the video to guests, verify transfer completion and provide customer support.
 
-The app does not delete the original video on your phone. Your Google Drive copy remains in your Drive unless you delete it yourself through Google Drive.
+The app never deletes the original video on your phone. Before sharing, you can separately consent to automatic deletion of the Wedding Video Share copy from your Google Drive after the download service streams the full expected number of bytes and records completion. If you do not consent, or the transfer is interrupted or cannot be verified, the Drive copy is kept. This server-side transfer check does not prove that the receiver's device saved the file to disk.
 
 ## Google Drive access
 
@@ -25,7 +25,7 @@ When you connect Google Drive, you separately authorize the app to create and re
 
 ## Sharing
 
-Anyone who receives an active guest link may be able to download the wedding video. Share the link only with people you trust. The app's download service records whether the full expected number of bytes was streamed by the server. This does not prove that the receiver's device successfully saved the file to disk.
+Anyone who receives an active guest link may be able to download the wedding video. Share the link only with people you trust. The download service records whether the full expected number of bytes was streamed by the server. This does not prove that the receiver's device successfully saved the file to disk. If you gave separate consent, the service automatically deletes its copy from your Google Drive after this server-side completion check.
 
 ## Service providers
 
@@ -43,7 +43,7 @@ Google Drive stores the video in your own account. The service database stores a
 
 ## Retention and deletion
 
-Your video remains in your Google Drive until you delete it there. Service records may be retained for account operation, fraud prevention, payment reconciliation, security and legal requirements. To request help with account information or service records, contact the support contact shown in the app's official store listing.
+Your video remains in your Google Drive until you delete it there or, if you gave separate consent, the service deletes its Wedding Video Share copy after a server-verified complete stream. Service records may be retained for account operation, fraud prevention, payment reconciliation, security and legal requirements. To request help with account information or service records, contact the support contact shown in the app's official store listing.
 
 ## Your choices
 
