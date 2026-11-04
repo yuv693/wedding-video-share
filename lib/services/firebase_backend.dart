@@ -17,7 +17,7 @@ class FirebaseBackend {
     return user;
   }
 
-  static Future<UserCredential> linkCurrentAccountWithEmailPassword({
+  static Future<User> linkCurrentAccountWithEmailPassword({
     required String email,
     required String password,
   }) async {
@@ -33,16 +33,16 @@ class FirebaseBackend {
         password: password,
       );
       if (result.user != null) await _saveCustomerProfile(result.user!);
-      return result;
+      return result.user!;
     }
     if (current.email?.toLowerCase() == normalizedEmail && !current.isAnonymous) {
       await _saveCustomerProfile(current);
-      return UserCredential._(current);
+      return current;
     }
     try {
       final result = await current.linkWithCredential(credential);
       if (result.user != null) await _saveCustomerProfile(result.user!);
-      return result;
+      return result.user!;
     } on FirebaseAuthException catch (error) {
       if (error.code != 'credential-already-in-use') rethrow;
       final result = await auth.signInWithEmailAndPassword(
@@ -50,11 +50,11 @@ class FirebaseBackend {
         password: password,
       );
       if (result.user != null) await _saveCustomerProfile(result.user!);
-      return result;
+      return result.user!;
     }
   }
 
-  static Future<UserCredential> signInWithEmailPassword({
+  static Future<User> signInWithEmailPassword({
     required String email,
     required String password,
   }) async {
@@ -62,18 +62,20 @@ class FirebaseBackend {
       email: email.trim().toLowerCase(),
       password: password,
     );
-    if (result.user != null) await _saveCustomerProfile(result.user!);
-    return result;
+    if (result.user == null) throw StateError('Firebase sign-in did not return a user.');
+    await _saveCustomerProfile(result.user!);
+    return result.user!;
   }
 
   static Future<void> _saveCustomerProfile(User user) async {
-    await firestore.collection('customers').doc(user.uid).set({
+    final ref = firestore.collection('customers').doc(user.uid);
+    final existing = await ref.get();
+    await ref.set({
       'uid': user.uid,
       'email': user.email,
       'displayName': user.displayName,
       'updatedAt': FieldValue.serverTimestamp(),
-      if (!user.metadata.creationTime!.isBefore(DateTime.now().subtract(const Duration(seconds: 10))))
-        'createdAt': FieldValue.serverTimestamp(),
+      if (!existing.exists) 'createdAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
