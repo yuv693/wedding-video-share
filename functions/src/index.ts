@@ -3,6 +3,7 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 export { createRazorpayOrder, verifyRazorpayPayment, razorpayWebhook } from "./payments";
+export { startGoogleDriveOAuth, googleDriveOAuthCallback } from "./googleDrive";
 
 if (!getApps().length) initializeApp();
 setGlobalOptions({ region: "asia-south1" });
