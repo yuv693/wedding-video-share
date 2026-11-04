@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1039771261692",
+    "project_id": "wedding-video-share",
+    "storage_bucket": "wedding-video-share.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1039771261692:android:bdad7cad5623d43bdd5579",
+        "android_client_info": {
+          "package_name": "com.weddingvideoshare.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJ7zap2-Y8XJVBZY37oBuw3nWorMfgUt0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
