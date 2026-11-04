@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -12,7 +11,6 @@ import 'services/backend.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
   await Supabase.initialize(
     url: supabaseUrl,
     publishableKey: supabasePublishableKey,
@@ -71,9 +69,6 @@ class _AuthGateState extends State<AuthGate> {
         if (_signedIn) _recovering = false;
       });
     });
-    // Existing customers who already have an anonymous app session also get
-    // the combined Google + Drive step after this app update, but only when
-    // the server says no Drive account is connected yet.
     if (supabase.auth.currentSession != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         unawaited(_connectDriveForExistingCustomer());
@@ -88,8 +83,6 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _startGoogleDriveConsent() async {
-    // The authenticated app customer is bound to a one-time OAuth state on
-    // the server. Google then confirms the account and grants drive.file.
     final response = await supabase.functions.invoke(
       'google-drive-oauth',
       body: {'action': 'start'},
@@ -100,7 +93,7 @@ class _AuthGateState extends State<AuthGate> {
     final authorizationUrl = data['authorizationUrl']?.toString();
     if (response.status != 200 || data['ok'] != true || authorizationUrl == null) {
       throw Exception(data['error']?.toString() ??
-          'Google confirmation is not configured yet. Please try again later.');
+          'Google Drive confirmation is not configured yet. Please try again later.');
     }
     final opened = await launchUrl(
       Uri.parse(authorizationUrl),
@@ -121,8 +114,6 @@ class _AuthGateState extends State<AuthGate> {
       if (quota.status == 200 && data['ok'] == true && data['email'] != null) return;
       await _startGoogleDriveConsent();
     } catch (e) {
-      // Keep the customer on the home screen if the Drive provider is not
-      // configured. The existing Connect Google Drive action remains available.
       debugPrint('Automatic Google Drive connection could not start: $e');
     }
   }
