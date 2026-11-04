@@ -2,6 +2,7 @@ import { initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
+export { createRazorpayOrder, verifyRazorpayPayment, razorpayWebhook } from "./payments";
 
 initializeApp();
 setGlobalOptions({ region: "asia-south1" });
