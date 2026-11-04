@@ -59,7 +59,7 @@ Keep the `DOWNLOAD_WORKER_SECRET` binding configured on that Worker. The Supabas
 - Test Google Drive OAuth, account email and quota.
 - Test upload first without payment, then ₹290 payment from the Share Video action; confirm the share link appears only after webhook verification.
 - Interrupt a small upload, reselect the same file and confirm resume.
-- Test a large upload near 15 GB on a suitable Drive account.
+- Test a large upload near 40 GB on a suitable Drive account.
 - Confirm an unpaid uploaded video cannot create or open a guest share link.
 - Create a private guest link; verify the 6-digit PIN and download on another device.
 - Interrupt a guest download and confirm the order does not lock.
