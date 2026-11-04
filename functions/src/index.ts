@@ -19,7 +19,7 @@ function requireUid(request: { auth?: { uid: string } | null }): string {
   return uid;
 }
 
-export const bootstrapCustomer = onCall(async (request) => {
+export const bootstrapCustomer = onCall({ region: 'asia-south1' }, async (request) => {
   const uid = requireUid(request);
   const userRef = db.collection("customers").doc(uid);
   await db.runTransaction(async (tx) => {
