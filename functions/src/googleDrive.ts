@@ -283,8 +283,11 @@ export const finalizeGoogleDriveUpload = onRequest(
       await db.runTransaction(async tx => {
         const freshSession = await tx.get(sessionRef);
         const videoRef = db.collection("weddingVideos").doc(uid);
-        const freshVideo = await tx.get(videoRef);
-        if (!freshSession.exists || !freshVideo.exists ||
+        const orderRef = db.collection("weddingOrders").doc(uid);
+        const [freshVideo, freshOrder] = await Promise.all([tx.get(videoRef), tx.get(orderRef)]);
+        if (!freshSession.exists || !freshVideo.exists || !freshOrder.exists ||
+            freshOrder.get("customerUid") !== uid || freshOrder.get("uploadLocked") === true ||
+            freshSession.get("customerUid") !== uid ||
             freshSession.get("filename") !== meta.name ||
             freshSession.get("sizeBytes") !== size ||
             freshVideo.get("uploadStatus") !== "uploading") {
@@ -295,6 +298,14 @@ export const finalizeGoogleDriveUpload = onRequest(
           fileSizeBytes: size, mimeType: meta.mimeType,
           googleDriveAccountEmail: email, uploadStatus: "uploaded",
           uploadedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+        });
+        // Lock this account's single video slot as soon as the full upload is
+        // verified. Payment/share can happen afterwards, but a second upload
+        // must never replace this verified video.
+        tx.update(orderRef, {
+          uploadLocked: true,
+          workflowStatus: "video_uploaded_pending_payment",
+          updatedAt: FieldValue.serverTimestamp(),
         });
         tx.delete(sessionRef);
         tx.create(db.collection("auditEvents").doc(), {
