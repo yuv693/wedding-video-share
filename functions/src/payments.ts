@@ -52,9 +52,8 @@ async function markPaymentPaid(uid: string, gatewayOrderId: string, paymentId: s
     }
     if (!videoSnap.exists || videoSnap.get("customerUid") !== uid ||
         videoSnap.get("uploadStatus") !== "uploaded" ||
-        !videoSnap.get("autoDeleteConsentAt") ||
         orderSnap.get("uploadLocked") !== true) {
-      throw new HttpsError("failed-precondition", "Verified video upload and active Drive deletion consent are required before payment can be marked paid.");
+      throw new HttpsError("failed-precondition", "A verified video upload is required before payment can be marked paid.");
     }
     if (txSnap.get("status") === "verified") return;
     transaction.update(txRef, {
@@ -101,9 +100,6 @@ export const createRazorpayOrder = onCall(
     }
     if (videoQuery.empty || videoQuery.docs[0].get("uploadStatus") !== "uploaded") {
       throw new HttpsError("failed-precondition", "Upload and verify your wedding video before payment.");
-    }
-    if (!videoQuery.docs[0].get("autoDeleteConsentAt")) {
-      throw new HttpsError("failed-precondition", "Confirm automatic Google Drive deletion after the receiver's full verified download before payment.");
     }
     const existing = await db.collection("paymentTransactions")
       .where("customerUid", "==", uid).limit(10).get();
