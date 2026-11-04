@@ -143,3 +143,137 @@ export async function getGoogleDriveAccessToken(uid: string): Promise<{ accessTo
   }
   return { accessToken: tokens.access_token, email: String(snap.get("googleEmail")) };
 }
+
+const MAX_VIDEO_BYTES = 40_000_000_000;
+function safeFilename(value: unknown): string {
+  const name = String(value ?? "").trim();
+  if (!name || name.length > 240 || /[\\\\/\\x00-\\x1f]/.test(name)) {
+    throw new HttpsError("invalid-argument", "A valid video filename is required.");
+  }
+  return name;
+}
+function safeMime(value: unknown): string {
+  const mime = String(value ?? "application/octet-stream");
+  if (!/^[a-z0-9.+-]+\\/[a-z0-9.+-]+$/i.test(mime)) {
+    throw new HttpsError("invalid-argument", "Invalid video MIME type.");
+  }
+  return mime;
+}
+async function driveRequest(accessToken: string, url: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(url, { ...init, headers: { Authorization: "Bearer " + accessToken, ...(init.headers ?? {}) } });
+}
+
+export const startGoogleDriveUpload = onRequest(
+  { region: "asia-south1", secrets: [clientId, clientSecret, redirectUri, encryptionKey] },
+  async (req, res) => {
+    try {
+      if (req.method !== "POST") { res.status(405).json({ error: "POST_REQUIRED" }); return; }
+      const uid = await bearerUid(req);
+      const filename = safeFilename(req.body?.filename);
+      const mimeType = safeMime(req.body?.mimeType);
+      const sizeBytes = Number(req.body?.sizeBytes);
+      const orderId = String(req.body?.orderId ?? "");
+      if (!Number.isSafeInteger(sizeBytes) || sizeBytes <= 0 || sizeBytes > MAX_VIDEO_BYTES) {
+        throw new HttpsError("invalid-argument", "Video must be between 1 byte and 40 GB.");
+      }
+      if (orderId !== uid) throw new HttpsError("permission-denied", "Order does not belong to this customer.");
+      const order = await db.collection("weddingOrders").doc(uid).get();
+      if (!order.exists || order.get("customerUid") !== uid || order.get("uploadLocked") === true) {
+        throw new HttpsError("failed-precondition", "A new wedding upload is not available for this account.");
+      }
+      const existing = await db.collection("weddingVideos").where("customerUid", "==", uid).limit(1).get();
+      if (!existing.empty && existing.docs[0].get("uploadStatus") === "uploaded") {
+        throw new HttpsError("already-exists", "This account already has its one wedding video.");
+      }
+      const { accessToken, email } = await getGoogleDriveAccessToken(uid);
+      const metadata = { name: filename, mimeType, description: "Wedding Video Share upload for customer " + uid };
+      const response = await driveRequest(accessToken,
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType",
+        { method: "POST", headers: { "Content-Type": "application/json; charset=UTF-8", "X-Upload-Content-Type": mimeType, "X-Upload-Content-Length": String(sizeBytes) }, body: JSON.stringify(metadata) });
+      const uploadUrl = response.headers.get("location");
+      if (!response.ok || !uploadUrl || !uploadUrl.startsWith("https://www.googleapis.com/upload/drive/")) {
+        throw new HttpsError("unavailable", "Google Drive could not start a resumable upload session.");
+      }
+      const videoRef = db.collection("weddingVideos").doc(uid);
+      await db.runTransaction(async tx => {
+        const freshOrder = await tx.get(db.collection("weddingOrders").doc(uid));
+        const freshVideo = await tx.get(videoRef);
+        if (!freshOrder.exists || freshOrder.get("uploadLocked") === true ||
+            (freshVideo.exists && freshVideo.get("uploadStatus") === "uploaded")) {
+          throw new HttpsError("failed-precondition", "This account is not eligible for another upload.");
+        }
+        tx.set(videoRef, {
+          customerUid: uid, orderId: uid, originalFilename: filename,
+          mimeType, fileSizeBytes: sizeBytes, uploadStatus: "uploading",
+          googleDriveAccountEmail: email, autoDeleteConsentAt: null,
+          deletedAt: null, createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        tx.set(db.collection("googleDriveUploadSessions").doc(uid), {
+          customerUid: uid, orderId: uid, filename, mimeType, sizeBytes,
+          uploadUrl, createdAt: FieldValue.serverTimestamp(),
+        });
+      });
+      res.set("Cache-Control", "no-store").json({ ok: true, uploadUrl, resumeOffset: 0 });
+    } catch (error) {
+      const status = error instanceof HttpsError ? (error.code === "unauthenticated" ? 401 : 400) : 500;
+      res.status(status).json({ error: error instanceof Error ? error.message : "UPLOAD_START_FAILED" });
+    }
+  },
+);
+
+export const finalizeGoogleDriveUpload = onRequest(
+  { region: "asia-south1", secrets: [clientId, clientSecret, redirectUri, encryptionKey] },
+  async (req, res) => {
+    try {
+      if (req.method !== "POST") { res.status(405).json({ error: "POST_REQUIRED" }); return; }
+      const uid = await bearerUid(req);
+      const fileId = String(req.body?.fileId ?? "");
+      if (!/^[a-zA-Z0-9_-]{10,200}$/.test(fileId)) throw new HttpsError("invalid-argument", "Invalid Google Drive file ID.");
+      const sessionRef = db.collection("googleDriveUploadSessions").doc(uid);
+      const [session, video] = await Promise.all([
+        sessionRef.get(), db.collection("weddingVideos").doc(uid).get(),
+      ]);
+      if (!session.exists || !video.exists || session.get("customerUid") !== uid ||
+          video.get("customerUid") !== uid || video.get("uploadStatus") !== "uploading") {
+        throw new HttpsError("failed-precondition", "No matching upload is awaiting verification.");
+      }
+      const { accessToken, email } = await getGoogleDriveAccessToken(uid);
+      const response = await driveRequest(accessToken,
+        "https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(fileId) + "?fields=id,name,mimeType,size,trashed,owners(emailAddress)");
+      const meta = await response.json() as Record<string, any>;
+      const size = Number(meta.size);
+      if (!response.ok || meta.id !== fileId || meta.trashed === true ||
+          meta.name !== session.get("filename") || meta.mimeType !== session.get("mimeType") ||
+          size !== session.get("sizeBytes") || size <= 0 || size > MAX_VIDEO_BYTES) {
+        throw new HttpsError("failed-precondition", "Google Drive file metadata does not match the expected complete upload.");
+      }
+      await db.runTransaction(async tx => {
+        const freshSession = await tx.get(sessionRef);
+        const videoRef = db.collection("weddingVideos").doc(uid);
+        const freshVideo = await tx.get(videoRef);
+        if (!freshSession.exists || !freshVideo.exists ||
+            freshSession.get("filename") !== meta.name ||
+            freshSession.get("sizeBytes") !== size ||
+            freshVideo.get("uploadStatus") !== "uploading") {
+          throw new HttpsError("aborted", "Upload verification state changed. Please retry.");
+        }
+        tx.update(videoRef, {
+          googleDriveFileId: fileId, originalFilename: meta.name,
+          fileSizeBytes: size, mimeType: meta.mimeType,
+          googleDriveAccountEmail: email, uploadStatus: "uploaded",
+          uploadedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+        });
+        tx.delete(sessionRef);
+        tx.create(db.collection("auditEvents").doc(), {
+          actorUid: uid, orderId: uid, eventType: "google_drive_upload_verified",
+          eventData: { fileId, sizeBytes: size }, createdAt: FieldValue.serverTimestamp(),
+        });
+      });
+      res.json({ ok: true, fileId, sizeBytes: size, uploadStatus: "uploaded" });
+    } catch (error) {
+      const status = error instanceof HttpsError ? (error.code === "unauthenticated" ? 401 : 400) : 500;
+      res.status(status).json({ error: error instanceof Error ? error.message : "UPLOAD_VERIFY_FAILED" });
+    }
+  },
+);
