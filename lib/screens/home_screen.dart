@@ -9,6 +9,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
 import '../services/firebase_backend.dart';
+import '../services/firebase_drive_service.dart';
+import '../services/firebase_wedding_service.dart';
 import '../widgets/account_access_card.dart';
 import '../services/video_upload_service.dart';
 
@@ -20,7 +22,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _razorpay = Razorpay();
-  final _uploadService = VideoUploadService();
+  final _uploadService = VideoUploadService(useFirebase: true);
+  final _firebaseDrive = FirebaseDriveService();
+  final _firebaseWedding = FirebaseWeddingService();
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
   bool _busy = false, _uploading = false, _autoDeleteConsent = false;
@@ -111,63 +115,60 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadOrder() async {
     try {
-      final row = await supabase.from('wedding_orders')
-        .select('id,payment_status,upload_locked,workflow_status')
-        .maybeSingle();
+      await _firebaseWedding.bootstrapCustomer();
+      final state = await _firebaseWedding.getAccountState();
+      final rawOrder = _map(state['order']);
+      final rawVideo = _map(state['video']);
+      final order = rawOrder.isEmpty ? null : <String, dynamic>{
+        'id': FirebaseBackend.currentUser?.uid,
+        'payment_status': rawOrder['paymentStatus'],
+        'upload_locked': rawOrder['uploadLocked'],
+        'workflow_status': rawOrder['workflowStatus'],
+      };
+      final video = rawVideo.isEmpty ? null : <String, dynamic>{
+        'id': rawVideo['id'], 'original_filename': rawVideo['originalFilename'],
+        'file_size_bytes': rawVideo['fileSizeBytes'], 'upload_status': rawVideo['uploadStatus'],
+        'google_drive_account_email': rawVideo['googleDriveAccountEmail'],
+        'deleted_at': rawVideo['deletedAt'], 'auto_delete_consent_at': rawVideo['autoDeleteConsentAt'],
+      };
+      final notifications = (state['notifications'] as List? ?? const []).map((item) {
+        final row = _map(item);
+        return <String, dynamic>{
+          'id': row['id'], 'notification_type': row['notificationType'],
+          'title': row['title'], 'message': row['message'],
+          'created_at': row['createdAt'], 'read_at': row['readAt'],
+        };
+      }).toList();
       if (!mounted) return;
-      setState(() => _order = row);
-      if (row != null) {
-        final video = await supabase.from('wedding_videos')
-          .select('id,original_filename,file_size_bytes,upload_status,google_drive_account_email,deleted_at,auto_delete_consent_at')
-          .eq('order_id', row['id'])
-          .maybeSingle();
-        if (mounted) setState(() { _video = video; _autoDeleteConsent = video?['auto_delete_consent_at'] != null; });
-      } else {
-        setState(() { _video = null; _autoDeleteConsent = false; });
-      }
+      setState(() {
+        _order = order; _video = video;
+        _autoDeleteConsent = video?['auto_delete_consent_at'] != null;
+        _notifications = notifications;
+      });
     } catch (_) {
-      if (mounted) setState(() => _status = 'Account status could not be loaded. Pull down to refresh.');
+      if (mounted) setState(() => _status = 'Firebase account status could not be loaded. Pull down to refresh.');
     }
   }
 
   Future<void> _loadQuota() async {
     try {
-      final response = await supabase.functions.invoke('google-drive-storage', body: {'action': 'quota'});
-      final data = _map(response.data);
-      if (response.status == 200 && data['ok'] == true && mounted) {
-        setState(() { _quota = data; _driveEmail = data['email']?.toString(); });
-      }
+      final data = await _firebaseDrive.getConnection();
+      if (mounted) setState(() => _driveEmail = data['connected'] == true ? data['email']?.toString() : null);
     } catch (_) {
-      // No linked Drive account yet, or the server has not been configured.
+      if (mounted) setState(() => _driveEmail = null);
     }
   }
 
   Future<void> _loadNotifications() async {
-    try {
-      final rows = await supabase.from('customer_notifications')
-        .select('id,notification_type,title,message,created_at,read_at')
-        .order('created_at', ascending: false)
-        .limit(5);
-      if (!mounted) return;
-      setState(() => _notifications = rows.map((row) => _map(row)).toList());
-    } catch (_) {
-      // Notifications are optional UI; the server remains the source of truth.
-    }
+    // Loaded together with the Firebase account state in _loadOrder().
   }
 
   Future<void> _connectDrive() async {
     setState(() { _busy = true; _status = null; });
     try {
-      final response = await supabase.functions.invoke('google-drive-oauth', body: {'action': 'start'});
-      final data = _map(response.data);
-      final authUrl = data['authorizationUrl']?.toString();
-      if (response.status != 200 || authUrl == null) {
-        throw Exception(data['error']?.toString() ?? 'Google Drive setup is not ready.');
-      }
-      if (!await launchUrl(Uri.parse(authUrl), mode: LaunchMode.externalApplication)) {
-        throw Exception('Could not open Google sign-in.');
-      }
-      if (mounted) setState(() => _status = 'Finish Google permission in the browser, then return to this app.');
+      final opened = await _firebaseDrive.connectGoogleDrive();
+      if (!opened) throw Exception('Could not open Google sign-in.');
+      if (mounted) setState(() => _status = 'Complete Google permission in the browser, then return to this app.');
     } catch (e) {
       if (mounted) setState(() => _status = 'Drive connection: $e');
     } finally {
