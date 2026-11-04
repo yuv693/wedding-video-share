@@ -94,6 +94,7 @@ jobs:
           PY
 
       - name: Save generated Android project files to repository
+        if: github.event_name != 'pull_request'
         run: |
           git add android pubspec.lock
           git add -f android/gradlew android/gradlew.bat android/gradle/wrapper/gradle-wrapper.jar
