@@ -41,7 +41,7 @@ https://mnaswhizatnwfwmjmtvm.supabase.co/functions/v1/razorpay-payments/webhook
 The Cloudflare Worker script is `wedding-video-download` on the `weddingvideoshare-ym` workers.dev subdomain. Its public receiver page is:
 https://wedding-video-download.weddingvideoshare-ym.workers.dev/
 
-Keep the `DOWNLOAD_WORKER_SECRET` binding configured on that Worker. The Supabase `wedding-share` function redirects paid, valid share links to this exact Worker URL.
+Keep the `DOWNLOAD_WORKER_SECRET` binding configured on that Worker. The Supabase `wedding-share` function redirects paid, valid share links to this exact Worker URL. The worker must call `worker_prepare` and `worker_complete` with the matching secret; verify this on a test share before public launch.
 
 ## 5. Android release signing and Play listing
 
@@ -59,12 +59,12 @@ Keep the `DOWNLOAD_WORKER_SECRET` binding configured on that Worker. The Supabas
 - Test Google Drive OAuth, account email and quota.
 - Test upload first without payment, then ₹290 payment from the Share Video action; confirm the share link appears only after webhook verification.
 - Interrupt a small upload, reselect the same file and confirm resume.
-- Test a large upload near 40 GB on a suitable Drive account.
+- Test a large upload near 40 GB on a suitable Drive account with enough available storage.
 - Confirm an unpaid uploaded video cannot create or open a guest share link.
 - Create a private guest link; verify the 6-digit PIN and download on another device.
-- Interrupt a guest download and confirm the order does not lock.
+- Interrupt a guest download and confirm the order does not lock and the Drive copy is not deleted.
 - Complete a full transfer and confirm exact expected bytes, customer notification and upload lock.
-- Confirm the phone original is untouched and the Drive copy remains until the customer deletes it.
+- Confirm the phone original is untouched. Confirm the Drive copy is deleted only when the customer explicitly consented; otherwise it remains.
 - Test revoked/expired links, incorrect PIN lockout, duplicate webhooks, insufficient Drive quota and expired upload sessions.
 
 The receiver service verifies the byte count streamed by the server. It cannot prove the receiver's device saved the file to disk or independently verify the downloaded file checksum.
