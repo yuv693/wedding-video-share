@@ -241,10 +241,44 @@ export const resumeGoogleDriveUpload = onRequest(
       if (!uploadUrl.startsWith("https://www.googleapis.com/upload/drive/")) {
         throw new HttpsError("failed-precondition", "The saved upload session is invalid.");
       }
-      res.set("Cache-Control", "no-store").json({
-        ok: true, uploadUrl, filename: snap.get("filename"),
-        mimeType: snap.get("mimeType"), expectedSizeBytes: snap.get("sizeBytes"),
+      const expectedSizeBytes = Number(snap.get("sizeBytes"));
+      if (!Number.isSafeInteger(expectedSizeBytes) || expectedSizeBytes <= 0 || expectedSizeBytes > MAX_VIDEO_BYTES) {
+        throw new HttpsError("failed-precondition", "Saved upload size is invalid.");
+      }
+      const { accessToken } = await getGoogleDriveAccessToken(uid);
+      // Google Drive's resumable protocol reports the server-accepted byte
+      // offset via a zero-byte PUT status probe. Never trust a client offset.
+      const probe = await driveRequest(accessToken, uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Length": "0", "Content-Range": "bytes */" + expectedSizeBytes },
       });
+      if (probe.status === 308) {
+        const range = probe.headers.get("range") ?? "";
+        const match = /^bytes=0-(\\d+)$/.exec(range);
+        const resumeOffset = match ? Number(match[1]) + 1 : 0;
+        if (!Number.isSafeInteger(resumeOffset) || resumeOffset > expectedSizeBytes) {
+          throw new HttpsError("data-loss", "Google Drive returned an invalid upload offset.");
+        }
+        res.set("Cache-Control", "no-store").json({
+          ok: true, uploadUrl, filename: snap.get("filename"),
+          mimeType: snap.get("mimeType"), expectedSizeBytes, resumeOffset,
+          uploadComplete: false,
+        });
+        return;
+      }
+      if (probe.status === 200 || probe.status === 201) {
+        const completed = await probe.json() as Record<string, any>;
+        res.set("Cache-Control", "no-store").json({
+          ok: true, filename: snap.get("filename"), mimeType: snap.get("mimeType"),
+          expectedSizeBytes, resumeOffset: expectedSizeBytes, uploadComplete: true,
+          fileId: String(completed.id ?? ""),
+        });
+        return;
+      }
+      if (probe.status === 404 || probe.status === 410) {
+        throw new HttpsError("failed-precondition", "Google Drive upload session expired. Start a new upload.");
+      }
+      throw new HttpsError("unavailable", "Google Drive could not confirm the resumable upload position.");
     } catch (error) {
       const status = error instanceof HttpsError
         ? (error.code === "unauthenticated" ? 401 : error.code === "not-found" ? 404 : 400)
