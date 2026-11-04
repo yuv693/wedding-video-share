@@ -222,6 +222,35 @@ export const startGoogleDriveUpload = onRequest(
   },
 );
 
+
+export const resumeGoogleDriveUpload = onRequest(
+  { region: "asia-south1", secrets: [clientId, clientSecret, redirectUri, encryptionKey] },
+  async (req, res) => {
+    try {
+      if (req.method !== "POST") { res.status(405).json({ error: "POST_REQUIRED" }); return; }
+      const uid = await bearerUid(req);
+      const sessionRef = db.collection("googleDriveUploadSessions").doc(uid);
+      const snap = await sessionRef.get();
+      if (!snap.exists || snap.get("customerUid") !== uid || snap.get("orderId") !== uid) {
+        throw new HttpsError("not-found", "No resumable upload session was found.");
+      }
+      const uploadUrl = String(snap.get("uploadUrl") ?? "");
+      if (!uploadUrl.startsWith("https://www.googleapis.com/upload/drive/")) {
+        throw new HttpsError("failed-precondition", "The saved upload session is invalid.");
+      }
+      res.set("Cache-Control", "no-store").json({
+        ok: true, uploadUrl, filename: snap.get("filename"),
+        mimeType: snap.get("mimeType"), expectedSizeBytes: snap.get("sizeBytes"),
+      });
+    } catch (error) {
+      const status = error instanceof HttpsError
+        ? (error.code === "unauthenticated" ? 401 : error.code === "not-found" ? 404 : 400)
+        : 500;
+      res.status(status).json({ error: error instanceof Error ? error.message : "UPLOAD_RESUME_FAILED" });
+    }
+  },
+);
+
 export const finalizeGoogleDriveUpload = onRequest(
   { region: "asia-south1", secrets: [clientId, clientSecret, redirectUri, encryptionKey] },
   async (req, res) => {
