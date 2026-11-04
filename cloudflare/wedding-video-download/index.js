@@ -1,14 +1,13 @@
 function safeFilename(value) {
-  const cleaned = String(value || "wedding-video").replace(/[\\r\\n"]/g, "_").replace(/[^\\w. ()-]/g, "_").slice(0, 180);
+  const cleaned = String(value || "wedding-video").replace(/[\r\n"]/g, "_").replace(/[^\w. ()-]/g, "_").slice(0, 180);
   return cleaned || "wedding-video";
 }
 async function control(env, payload) {
   if (!env.DOWNLOAD_WORKER_SECRET) throw new Error("DOWNLOAD_WORKER_SECRET_MISSING");
-  const response = await fetch("https://mnaswhizatnwfwmjmtvm.supabase.co/functions/v1/wedding-share", {
+  const response = await fetch("https://asia-south1-wedding-video-share.cloudfunctions.net/weddingShareWorkerControl", {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "apikey": "sb_publishable_BwuKkASTfQuapaf1vnIAig_6sR9AGpW",
       "x-download-worker-secret": env.DOWNLOAD_WORKER_SECRET
     },
     body: JSON.stringify(payload)

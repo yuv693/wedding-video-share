@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Profile data is user-readable. Sensitive account/order state is server-written.
+    match /customers/{uid} {
+      allow read: if isOwner(uid);
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == uid;
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['email', 'displayName', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // Order state, payments, video metadata and consent are written by trusted
+    // Cloud Functions only. Clients may read only their own records.
+    match /weddingOrders/{orderId} {
+      allow read: if signedIn() && resource.data.customerUid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /weddingVideos/{videoId} {
+      allow read: if signedIn() && resource.data.customerUid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /customerNotifications/{notificationId} {
+      allow read: if signedIn() && resource.data.customerUid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /paymentTransactions/{transactionId} {
+      allow read: if signedIn() && resource.data.customerUid == request.auth.uid;
+      allow write: if false;
+    }
+
+    match /shareLinks/{shareId} {
+      allow read, write: if false;
+    }
+
+    match /receiverDownloads/{downloadId} {
+      allow read, write: if false;
+    }
+
+    match /auditEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

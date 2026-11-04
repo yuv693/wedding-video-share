@@ -2,7 +2,7 @@ name: Android build
 
 on:
   push:
-    branches: [main]
+    branches: [main, firebase-auth-firestore-migration]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -38,6 +38,15 @@ jobs:
 
       - name: Analyze Dart and Flutter code
         run: flutter analyze --no-pub
+
+      - name: Build Firebase Cloud Functions
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install and compile Firebase Functions
+        working-directory: functions
+        run: npm install --no-audit --no-fund && npm run build
 
       - name: Run Flutter tests
         run: flutter test --no-pub
@@ -85,6 +94,7 @@ jobs:
           PY
 
       - name: Save generated Android project files to repository
+        if: github.event_name != 'pull_request'
         run: |
           git add android pubspec.lock
           git add -f android/gradlew android/gradlew.bat android/gradle/wrapper/gradle-wrapper.jar
@@ -92,8 +102,8 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git commit -m "Add generated Android platform project [skip ci]"
-            git pull --rebase origin main
-            git push
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
       - name: Configure Play Store release signing when secrets are available

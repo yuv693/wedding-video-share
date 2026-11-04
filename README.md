@@ -12,7 +12,7 @@ Flutter Android app for private wedding-video sharing.
 - A new wedding video requires a new customer account and a new ₹290 payment.
 
 ## Current app flow
-1. Welcome page creates a private Supabase anonymous customer session. No Supabase Google sign-in is used.
+1. Welcome page creates a Firebase anonymous identity and a temporary legacy Supabase anonymous session. Google Drive authorization remains a separate OAuth flow.
 2. Customer adds and verifies a recovery email before uploading or paying.
 3. Customer connects Google Drive separately using Drive OAuth.
 4. Customer uploads one video (up to 40 GB) to their own Drive using resumable upload.
@@ -24,9 +24,9 @@ Flutter Android app for private wedding-video sharing.
 10. The customer may manually delete the Drive copy. The app does not delete it automatically.
 
 ## Implementation status
-These are implemented UI/code paths, not proof that every third-party integration or the complete journey has passed real-device testing.
+These are implemented UI/code paths, not proof that every third-party integration or the complete journey has passed real-device testing. Firebase Auth/Firestore cutover is not complete; see `docs/FIREBASE_MIGRATION.md`.
 
-- Supabase Auth creates the customer identity; verified email is used for account recovery.
+- Firebase Authentication creates the customer identity; customers link an email/password to the anonymous Firebase account for cross-device recovery. The legacy Supabase identity remains temporarily active for existing Edge Function authorization.
 - Google Drive authorization is a separate OAuth flow.
 - Video upload uses resumable chunks and verifies the uploaded file size.
 - Razorpay checkout is not considered paid until the server webhook verifies it.
@@ -44,7 +44,9 @@ These are implemented UI/code paths, not proof that every third-party integratio
 These are draft documents. Add a monitored support contact, publish stable public URLs and obtain legal review before release.
 
 ## Still required before public launch
-- Confirm Supabase anonymous sign-in, manual identity linking, email provider, SMTP and six-digit OTP templates.
+- Finish migrating all Supabase Edge Functions and operational tables to Firebase Cloud Functions and Firestore, then reconcile existing customer IDs before removing Supabase.
+- Deploy Firestore security rules and Firebase Functions; enable Firebase Anonymous and Email/Password providers.
+- Confirm legacy Supabase anonymous sign-in and six-digit OTP templates during the transition.
 - Configure the separate Google Drive OAuth client and verify the Drive callback on Android.
 - Replace the Google token-encryption secret with a fresh random 32-byte base64 key before real customers connect Google Drive.
 - Configure Razorpay test keys and webhook, then run a verified test payment.

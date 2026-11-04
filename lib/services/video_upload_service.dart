@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 
 import 'backend.dart';
+import 'firebase_drive_service.dart';
 
 const int maxVideoBytes = 40000000000;
 const int uploadChunkBytes = 8 * 1024 * 1024;
@@ -56,6 +57,11 @@ class VideoUploadResult {
 }
 
 class VideoUploadService {
+  VideoUploadService({this.useFirebase = false});
+
+  final bool useFirebase;
+  final FirebaseDriveService _firebaseDrive = FirebaseDriveService();
+
   Future<VideoUploadResult> upload({
     required String orderId,
     required PlatformFile file,
@@ -191,14 +197,18 @@ class VideoUploadService {
 
     if (fileId.isEmpty) throw Exception('Google Drive did not confirm the completed upload.');
 
-    final finalize = await supabase.functions.invoke('google-drive-storage', body: {
-      'action': 'finalize_upload',
-      'orderId': orderId,
-      'fileId': fileId,
-    });
-    final finalData = _asMap(finalize.data);
-    if (finalize.status != 200 || finalData['ok'] != true) {
-      throw Exception(finalData['error']?.toString() ?? 'The uploaded file could not be verified.');
+    if (useFirebase) {
+      await _firebaseDrive.finalizeUpload(fileId: fileId);
+    } else {
+      final finalize = await supabase.functions.invoke('google-drive-storage', body: {
+        'action': 'finalize_upload',
+        'orderId': orderId,
+        'fileId': fileId,
+      });
+      final finalData = _asMap(finalize.data);
+      if (finalize.status != 200 || finalData['ok'] != true) {
+        throw Exception(finalData['error']?.toString() ?? 'The uploaded file could not be verified.');
+      }
     }
 
     return VideoUploadResult(fileName: file.name);
@@ -209,6 +219,42 @@ class VideoUploadService {
     required PlatformFile file,
     required String mime,
   }) async {
+    if (useFirebase) {
+      Map<String, dynamic>? resumeData;
+      try {
+        resumeData = await _firebaseDrive.resumeUpload();
+      } catch (error) {
+        // Only a confirmed missing session permits a fresh upload. Network,
+        // authentication, and server errors must not silently start another.
+        if (!error.toString().contains('No resumable upload session')) rethrow;
+      }
+      if (resumeData != null) {
+        final matches = resumeData['filename'] == file.name &&
+            int.tryParse('${resumeData['expectedSizeBytes']}') == file.size &&
+            resumeData['mimeType'] == mime &&
+            resumeData['uploadUrl'] != null;
+        if (!matches) {
+          throw Exception('A different video upload is already in progress for this account. Select the same video to resume it.');
+        }
+        return {
+          'uploadUrl': resumeData['uploadUrl'].toString(),
+          'resumeOffset': resumeData['resumeOffset'] as int? ?? 0,
+          if (resumeData['uploadComplete'] == true)
+            'completedFileId': resumeData['completedFileId']?.toString() ?? '',
+        };
+      }
+      final started = await _firebaseDrive.startUpload(
+        orderId: orderId,
+        filename: file.name,
+        mimeType: mime,
+        sizeBytes: file.size,
+      );
+      return {
+        'uploadUrl': started['uploadUrl'].toString(),
+        'resumeOffset': started['resumeOffset'] as int? ?? 0,
+      };
+    }
+
     final resume = await supabase.functions.invoke('google-drive-storage', body: {
       'action': 'resume_upload',
       'orderId': orderId,

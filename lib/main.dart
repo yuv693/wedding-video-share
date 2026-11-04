@@ -2,8 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'services/firebase_backend.dart';
+import 'services/firebase_drive_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'screens/welcome_screen.dart';
 import 'screens/home_screen.dart';
@@ -88,48 +89,25 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _startGoogleDriveConsent() async {
-    // The authenticated app customer is bound to a one-time OAuth state on
-    // the server. Google then confirms the account and grants drive.file.
-    final response = await supabase.functions.invoke(
-      'google-drive-oauth',
-      body: {'action': 'start'},
-    );
-    final data = response.data is Map
-        ? Map<String, dynamic>.from(response.data as Map)
-        : <String, dynamic>{};
-    final authorizationUrl = data['authorizationUrl']?.toString();
-    if (response.status != 200 || data['ok'] != true || authorizationUrl == null) {
-      throw Exception(data['error']?.toString() ??
-          'Google confirmation is not configured yet. Please try again later.');
-    }
-    final opened = await launchUrl(
-      Uri.parse(authorizationUrl),
-      mode: LaunchMode.externalApplication,
-    );
-    if (!opened) throw Exception('Could not open Google confirmation.');
+    final opened = await FirebaseDriveService().connectGoogleDrive();
+    if (!opened) throw Exception('Could not open Google Drive permission.');
   }
 
   Future<void> _connectDriveForExistingCustomer() async {
     try {
-      final quota = await supabase.functions.invoke(
-        'google-drive-storage',
-        body: {'action': 'quota'},
-      );
-      final data = quota.data is Map
-          ? Map<String, dynamic>.from(quota.data as Map)
-          : <String, dynamic>{};
-      if (quota.status == 200 && data['ok'] == true && data['email'] != null) return;
+      await FirebaseBackend.signInAnonymouslyIfNeeded();
+      final connection = await FirebaseDriveService().getConnection();
+      if (connection['connected'] == true) return;
       await _startGoogleDriveConsent();
     } catch (e) {
-      // Keep the customer on the home screen if the Drive provider is not
-      // configured. The existing Connect Google Drive action remains available.
-      debugPrint('Automatic Google Drive connection could not start: $e');
+      debugPrint('Automatic Firebase Google Drive connection could not start: $e');
     }
   }
 
   Future<void> _getStarted() async {
     setState(() { _starting = true; _error = null; });
     try {
+      await FirebaseBackend.signInAnonymouslyIfNeeded();
       if (supabase.auth.currentSession == null) {
         await supabase.auth.signInAnonymously();
       }

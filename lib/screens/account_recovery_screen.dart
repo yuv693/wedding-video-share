@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/backend.dart';
+import '../services/firebase_backend.dart';
 
 class AccountRecoveryScreen extends StatefulWidget {
   const AccountRecoveryScreen({
@@ -20,14 +21,17 @@ class AccountRecoveryScreen extends StatefulWidget {
 class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
   final _email = TextEditingController();
   final _code = TextEditingController();
+  final _password = TextEditingController();
   bool _sent = false;
   bool _busy = false;
   String? _error;
+  String? _notice;
 
   @override
   void dispose() {
     _email.dispose();
     _code.dispose();
+    _password.dispose();
     super.dispose();
   }
 
@@ -37,7 +41,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
       setState(() => _error = 'Enter the email address linked to your account.');
       return;
     }
-    setState(() { _busy = true; _error = null; });
+    setState(() { _busy = true; _error = null; _notice = null; });
     try {
       await supabase.auth.signInWithOtp(email: email, shouldCreateUser: false);
       if (mounted) setState(() => _sent = true);
@@ -50,9 +54,26 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
     }
   }
 
+  Future<void> _resetFirebasePassword() async {
+    final email = _email.text.trim().toLowerCase();
+    setState(() { _busy = true; _error = null; });
+    try {
+      await FirebaseBackend.sendPasswordResetEmail(email);
+      if (mounted) setState(() => _notice = 'Firebase password reset email sent. Check your inbox, reset it, then return here.');
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not send password reset email: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _verifyCode() async {
     final email = _email.text.trim().toLowerCase();
     final code = _code.text.trim();
+    if (_password.text.length < 6) {
+      setState(() => _error = 'Enter your Firebase recovery password.');
+      return;
+    }
     if (!RegExp(r'^\d{6}$').hasMatch(code)) {
       setState(() => _error = 'Enter the 6-digit code from your email.');
       return;
@@ -63,11 +84,15 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
       if (result.session == null || result.user == null) {
         throw const AuthException('The recovery code did not create a session. Request a new code.');
       }
+      await FirebaseBackend.signInWithEmailPassword(
+        email: email,
+        password: _password.text,
+      );
       widget.onAuthenticated();
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Could not recover this account. Please check the code and try again.');
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not restore the Firebase account. Make sure you linked this email on your old phone and entered the correct password. Details: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -113,6 +138,17 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
                   if (_sent) ...[
                     const SizedBox(height: 12),
                     TextField(
+                      controller: _password,
+                      enabled: !_busy,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Firebase recovery password',
+                        prefixIcon: Icon(Icons.lock_outline),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
                       controller: _code,
                       enabled: !_busy,
                       keyboardType: TextInputType.number,
@@ -135,11 +171,20 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
                         ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                         : Text(_sent ? 'Recover account' : 'Send recovery code'),
                   ),
-                  if (_sent)
+                  if (_sent) ...[
                     TextButton(
                       onPressed: _busy ? null : _sendCode,
                       child: const Text('Resend code'),
                     ),
+                    TextButton(
+                      onPressed: _busy ? null : _resetFirebasePassword,
+                      child: const Text('Forgot Firebase password? Send reset email'),
+                    ),
+                  ],
+                  if (_notice != null) ...[
+                    const SizedBox(height: 12),
+                    Text(_notice!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.green)),
+                  ],
                   if (_error != null) ...[
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
