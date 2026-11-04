@@ -96,12 +96,13 @@ export const createRazorpayOrder = onCall(
       throw new HttpsError("failed-precondition", "Confirm automatic Google Drive deletion after the receiver's full verified download before payment.");
     }
     const existing = await db.collection("paymentTransactions")
-      .where("customerUid", "==", uid).where("status", "==", "created")
-      .orderBy("createdAt", "desc").limit(1).get();
+      .where("customerUid", "==", uid).limit(10).get();
     const keyId = razorpayKeyId.value();
     const keySecret = razorpayKeySecret.value();
-    if (existing.docs.length) {
-      const previous = existing.docs[0];
+    const previous = existing.docs
+      .filter((doc) => doc.get("status") === "created")
+      .sort((a, b) => (b.get("createdAt")?.toMillis?.() ?? 0) - (a.get("createdAt")?.toMillis?.() ?? 0))[0];
+    if (previous) {
       const createdAt = previous.get("createdAt")?.toDate?.()?.getTime?.() ?? 0;
       if (Date.now() - createdAt < 30 * 60 * 1000 && previous.get("gatewayOrderId")) {
         return {
