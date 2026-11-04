@@ -21,11 +21,12 @@ Do not let customers upload or pay until a recovery email is verified. Phone-onl
 This is separate from customer account recovery. It grants access to the customer's chosen Drive.
 1. In Supabase Dashboard → Project Settings → API Keys → Legacy API keys, copy the legacy service_role key and save it as SERVICE_ROLE_KEY under Project Settings → Edge Functions → Secrets. Do not paste this key into chat or GitHub. The server functions read this custom secret name because Supabase reserves the SUPABASE_ prefix.
 2. Enable the Google Drive API in Google Cloud Console.
-3. Set the Drive OAuth web client redirect URI to:
+3. In Google Auth Platform → Data Access, add the exact scope `https://www.googleapis.com/auth/drive.file` and publish/allow it for the test users. The app requests this scope; if Google's callback returns only `openid` and `email`, Drive access was not granted and upload cannot work.
+4. Set the Drive OAuth web client redirect URI to:
 https://mnaswhizatnwfwmjmtvm.supabase.co/functions/v1/google-drive-oauth
-4. Before real customers connect Drive, replace GOOGLE_TOKEN_ENCRYPTION_KEY in Supabase Edge Function Secrets with a fresh cryptographically random 32-byte base64 value. Do not reuse the old key or share it in chat.
-5. Complete Google's OAuth consent-screen production verification as required.
-6. Test Drive connection/return, account email, quota, folder creation, upload and delete on a real Android device.
+5. Before real customers connect Drive, replace GOOGLE_TOKEN_ENCRYPTION_KEY in Supabase Edge Function Secrets with a fresh cryptographically random 32-byte base64 value. Do not reuse the old key or share it in chat.
+6. Complete Google's OAuth consent-screen production verification as required.
+7. Test Drive connection/return, account email, quota, folder creation, upload and delete on a real Android device.
 
 ## 3. Razorpay
 
