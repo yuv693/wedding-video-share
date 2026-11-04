@@ -50,4 +50,7 @@ class FirebaseWeddingService {
         'razorpayPaymentId': razorpayPaymentId,
         'razorpaySignature': razorpaySignature,
       });
+
+  Future<Map<String, dynamic>> createWeddingShare() =>
+      _call('createWeddingShare');
 }
