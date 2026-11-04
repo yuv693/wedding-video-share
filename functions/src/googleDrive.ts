@@ -333,14 +333,39 @@ export const finalizeGoogleDriveUpload = onRequest(
         throw new HttpsError("failed-precondition", "No matching upload is awaiting verification.");
       }
       const { accessToken, email } = await getGoogleDriveAccessToken(uid);
+      const uploadUrl = String(session.get("uploadUrl") ?? "");
+      const expectedSize = Number(session.get("sizeBytes"));
+      if (!uploadUrl.startsWith("https://www.googleapis.com/upload/drive/") ||
+          !Number.isSafeInteger(expectedSize) || expectedSize <= 0 || expectedSize > MAX_VIDEO_BYTES) {
+        throw new HttpsError("failed-precondition", "The saved upload session is invalid.");
+      }
+      // Finalization independently asks Google to complete/report this exact
+      // resumable session. A client cannot finalize by submitting an unrelated
+      // pre-existing Drive file that merely has the same name and size.
+      const completion = await driveRequest(accessToken, uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Length": "0", "Content-Range": "bytes */" + expectedSize },
+      });
+      if (completion.status !== 200 && completion.status !== 201) {
+        throw new HttpsError("failed-precondition", "Google Drive has not confirmed that this upload session is complete.");
+      }
+      const completedFile = await completion.json() as Record<string, any>;
+      if (completedFile.id !== fileId) {
+        throw new HttpsError("permission-denied", "The submitted file does not match the completed upload session.");
+      }
       const response = await driveRequest(accessToken,
         "https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(fileId) + "?fields=id,name,mimeType,size,trashed,owners(emailAddress)");
       const meta = await response.json() as Record<string, any>;
       const size = Number(meta.size);
+      const owners = Array.isArray(meta.owners) ? meta.owners : [];
+      const belongsToConnectedAccount = owners.some((owner: any) =>
+        typeof owner?.emailAddress === "string" &&
+        owner.emailAddress.toLowerCase() === email.toLowerCase());
       if (!response.ok || meta.id !== fileId || meta.trashed === true ||
+          !belongsToConnectedAccount ||
           meta.name !== session.get("filename") || meta.mimeType !== session.get("mimeType") ||
-          size !== session.get("sizeBytes") || size <= 0 || size > MAX_VIDEO_BYTES) {
-        throw new HttpsError("failed-precondition", "Google Drive file metadata does not match the expected complete upload.");
+          size !== expectedSize || size <= 0 || size > MAX_VIDEO_BYTES) {
+        throw new HttpsError("failed-precondition", "Google Drive file ownership or metadata does not match the completed upload.");
       }
       await db.runTransaction(async tx => {
         const freshSession = await tx.get(sessionRef);
