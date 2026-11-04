@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 
 import 'backend.dart';
 
-const int maxVideoBytes = 15000000000;
+const int maxVideoBytes = 40000000000;
 const int uploadChunkBytes = 8 * 1024 * 1024;
 const int _driveGranularity = 256 * 1024;
 
@@ -62,7 +62,7 @@ class VideoUploadService {
     required void Function(double progress) onProgress,
   }) async {
     if (file.size <= 0 || file.size > maxVideoBytes) {
-      throw Exception('Choose a video larger than 0 bytes and no bigger than 15 GB.');
+      throw Exception('Choose a video larger than 0 bytes and no bigger than 40 GB.');
     }
     final mime = _mimeFor(file.name);
     final startData = await _openOrResumeSession(orderId: orderId, file: file, mime: mime);
