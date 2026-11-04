@@ -26,6 +26,8 @@ The Firebase functions in this branch are the first server-side Firestore layer;
 5. Firebase Functions deployment may require the Blaze billing plan. Set budget alerts before enabling production functions.
 6. Test anonymous account creation, account linking/recovery, owner-only reads, payment webhook verification, Drive OAuth/resumable upload, share PIN, full-byte download verification, and consent-based Drive deletion before cutover.
 
+The Android build workflow compiles the Firebase Functions TypeScript source. The separate manual deployment workflow requires the GitHub secret above. Functions deployment can require the Firebase project to be on the Blaze billing plan; set a budget alert first.
+
 ## Data migration
 
 Existing Supabase customer/order/video IDs must be mapped to Firebase UIDs before production cutover. Do not assume Firebase UIDs equal Supabase user IDs. Export/import must preserve the one-video-per-account rule, payment verification history, Drive OAuth ownership mapping, consent timestamps, share-link state, download attempts and audit records. Keep the old Supabase project intact until reconciliation is complete.
