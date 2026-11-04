@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/backend.dart';
+import '../services/firebase_backend.dart';
 
 class AccountRecoveryScreen extends StatefulWidget {
   const AccountRecoveryScreen({
@@ -20,6 +21,7 @@ class AccountRecoveryScreen extends StatefulWidget {
 class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
   final _email = TextEditingController();
   final _code = TextEditingController();
+  final _password = TextEditingController();
   bool _sent = false;
   bool _busy = false;
   String? _error;
@@ -28,6 +30,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
   void dispose() {
     _email.dispose();
     _code.dispose();
+    _password.dispose();
     super.dispose();
   }
 
@@ -63,6 +66,10 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
       if (result.session == null || result.user == null) {
         throw const AuthException('The recovery code did not create a session. Request a new code.');
       }
+      await FirebaseBackend.signInWithEmailPassword(
+        email: email,
+        password: _password.text,
+      );
       widget.onAuthenticated();
     } on AuthException catch (e) {
       if (mounted) setState(() => _error = e.message);
@@ -111,6 +118,17 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
                     ),
                   ),
                   if (_sent) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _password,
+                      enabled: !_busy,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Firebase recovery password',
+                        prefixIcon: Icon(Icons.lock_outline),
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _code,
