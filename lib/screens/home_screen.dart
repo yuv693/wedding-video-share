@@ -177,10 +177,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _startPayment() async {
-    if (!_autoDeleteConsent) {
-      if (mounted) setState(() => _status = 'Please confirm automatic Google Drive deletion after the receiver’s full verified download before payment.');
-      return;
-    }
     if (_video?['upload_status'] != 'uploaded' || _order == null) {
       setState(() => _status = 'Upload your wedding video first. Payment is needed when you share it.');
       return;
@@ -312,10 +308,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _makeShareLink() async {
     if (_order == null || _video?['upload_status'] != 'uploaded') return;
-    if (!_autoDeleteConsent) {
-      if (mounted) setState(() => _status = 'Please confirm automatic deletion of the Google Drive copy after the receiver completes the full download.');
-      return;
-    }
     if (_order?['payment_status'] != 'paid') {
       await _startPayment();
       return;
@@ -514,26 +506,26 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Text('A private link, ready to send.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
-                    const Text("Pay ₹290 to unlock private sharing. After the receiver's full video transfer is verified by our server, the Google Drive copy will be automatically deleted if you confirm below. Your phone original is never deleted."),
+                    const Text("Pay ₹290 to unlock private sharing. The Google Drive deletion option below is optional: if you agree, the Drive copy is deleted only after the receiver's full video transfer is verified by our server. If you leave it unchecked, your Drive copy stays saved. Your phone original is never deleted."),
                     const SizedBox(height: 12),
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
                       value: _autoDeleteConsent,
                       onChanged: _busy || _uploading ? null : (value) => unawaited(_updateAutoDeleteConsent(value == true)),
                       controlAffinity: ListTileControlAffinity.leading,
-                      title: const Text('I agree: automatically delete my Google Drive video after the receiver’s full download is verified.'),
-                      subtitle: const Text('Only the Google Drive copy is deleted. The original on your phone is not touched. If the download is interrupted or cannot be verified, the Drive copy is kept.'),
+                      title: const Text('Optional: automatically delete my Google Drive video after the receiver’s full download is verified.'),
+                      subtitle: const Text('If unchecked, your Google Drive copy stays saved. If checked, only the Drive copy is deleted after a complete server-verified transfer. Your phone original is never touched.'),
                     ),
                     if (!paid)
                       FilledButton.icon(
-                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _startPayment,
+                        onPressed: _busy || _uploading ? null : _startPayment,
                         icon: const Icon(Icons.lock_open_rounded),
                         label: const Text('Share Video – Pay ₹290'),
                         style: FilledButton.styleFrom(backgroundColor: burgundy),
                       )
                     else
                       OutlinedButton.icon(
-                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _makeShareLink,
+                        onPressed: _busy || _uploading ? null : _makeShareLink,
                         icon: const Icon(Icons.link),
                         label: const Text('Create / refresh private link'),
                       ),
