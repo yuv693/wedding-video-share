@@ -5,7 +5,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'services/firebase_backend.dart';
 import 'services/firebase_drive_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'screens/welcome_screen.dart';
 import 'screens/home_screen.dart';
