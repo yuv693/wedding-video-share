@@ -19,7 +19,7 @@ const b64bytes = (s: string) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 function adminClient() {
   const url = Deno.env.get("SUPABASE_URL");
   const secretRaw = Deno.env.get("SUPABASE_SECRET_KEYS");
-  const legacy = Deno.env.get("SERVICE_ROLE_KEY");
+  const legacy = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SERVICE_ROLE_KEY");
   // Prefer the explicitly named service-role JWT for PostgREST RPC role resolution.
   // New sb_secret keys remain a fallback when the legacy key is unavailable.
   let key = legacy;
@@ -62,10 +62,15 @@ async function startOAuth(req: Request, ctx: any) {
   const stateHash = await sha256(state);
   // Use the same explicitly configured backend client as the OAuth callback.
   // The request's user identity still comes only from the validated user JWT.
+  const customerId = ctx.userClaims?.id;
+  if (typeof customerId !== "string" || !customerId) {
+    console.error("OAUTH_USER_ID_MISSING");
+    return json({ error: "OAUTH_USER_ID_MISSING" }, 401);
+  }
   const admin = adminClient();
   const { error } = await admin.rpc("gdrive_oauth_state_create", {
     p_state_hash: stateHash,
-    p_customer_id: ctx.userClaims.sub,
+    p_customer_id: customerId,
   });
   if (error) {
     console.error("OAUTH_STATE_SAVE_FAILED", error.code ?? "unknown", error.message ?? "no message");
@@ -124,7 +129,15 @@ async function callback(req: Request) {
   });
   const tokens = await tokenResponse.json();
   if (!tokenResponse.ok || typeof tokens.refresh_token !== "string") {
-    return htmlPage("Connection incomplete", "Google did not provide an offline refresh token. Please reconnect and approve the requested Drive access.", false);
+    console.error("GOOGLE_TOKEN_DIAGNOSTIC", JSON.stringify({
+      http_status: tokenResponse.status,
+      oauth_error: typeof tokens.error === "string" ? tokens.error : null,
+      oauth_error_description: typeof tokens.error_description === "string" ? tokens.error_description.slice(0, 180) : null,
+      refresh_token_present: typeof tokens.refresh_token === "string",
+      access_token_present: typeof tokens.access_token === "string",
+      granted_scope: typeof tokens.scope === "string" ? tokens.scope : null
+    }));
+    return htmlPage("Connection incomplete", "Google authorization returned without the offline token needed for a persistent Drive connection. Please try again later.", false);
   }
 
   const userResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
