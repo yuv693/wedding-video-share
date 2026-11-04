@@ -444,8 +444,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Text('Your Wedding', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
                   const Text('₹290  •  One-Wedding Plan'),
-                  const Text('Upload one wedding video up to 15 GB.'),
-                  const Text('Maximum video size: 15 GB (decimal).'),
+                  const Text('Upload one wedding video up to 40 GB.'),
+                  const Text('Maximum video size: 40 GB (decimal).'),
                   const SizedBox(height: 12),
                   if (paid)
                     const Row(children: [Icon(Icons.verified, color: Colors.green), SizedBox(width: 8), Text('Payment verified by server')])
@@ -498,7 +498,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('Upload without the guesswork.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  const Text('Choose one video up to 15 GB. It uploads to your own Google Drive; your phone original is never deleted. If the connection stops, choose the same file again to resume.'),
+                  const Text('Choose one video up to 40 GB. It uploads to your own Google Drive; your phone original is never deleted. If the connection stops, choose the same file again to resume.'),
                   const SizedBox(height: 12),
                   if (videoReady)
                     Text('Uploaded: ${_video!['original_filename']} (${_bytes(_video!['file_size_bytes'])})')
