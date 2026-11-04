@@ -22,7 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _uploadService = VideoUploadService();
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
-  bool _busy = false, _uploading = false;
+  bool _busy = false, _uploading = false, _autoDeleteConsent = false;
   int _selectedTab = 0;
   double _uploadProgress = 0;
   String? _status, _driveEmail, _shareUrl, _sharePin;
@@ -288,12 +288,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _makeShareLink() async {
     if (_order == null || _video?['upload_status'] != 'uploaded') return;
+    if (!_autoDeleteConsent) {
+      if (mounted) setState(() => _status = 'Please confirm automatic deletion of the Google Drive copy after the receiver completes the full download.');
+      return;
+    }
     if (_order?['payment_status'] != 'paid') {
       await _startPayment();
       return;
     }
     setState(() { _busy = true; _status = null; });
     try {
+      final consentResponse = await supabase.functions.invoke('google-drive-storage', body: {
+        'action': 'set_auto_delete_consent',
+        'videoId': _video!['id'],
+        'consent': true,
+      });
+      final consentData = _map(consentResponse.data);
+      if (consentResponse.status != 200 || consentData['ok'] != true) {
+        throw Exception(consentData['error']?.toString() ?? 'Could not save automatic deletion consent.');
+      }
       final response = await supabase.functions.invoke('wedding-share', body: {
         'action': 'create_share',
         'orderId': _order!['id'],
@@ -533,8 +546,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     const Text('A private link, ready to send.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 8),
-                    const Text('Pay ₹290 to unlock private sharing. After the payment is verified, your private link and 6-digit PIN will appear here. Your Google Drive copy stays saved until you choose to delete it.'),
+                    const Text('Pay ₹290 to unlock private sharing. After the receiver's full video transfer is verified by our server, the Google Drive copy will be automatically deleted if you confirm below. Your phone original is never deleted.'),
                     const SizedBox(height: 12),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _autoDeleteConsent,
+                      onChanged: _busy || _uploading ? null : (value) => setState(() => _autoDeleteConsent = value == true),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text('I agree: automatically delete my Google Drive video after the receiver’s full download is verified.'),
+                      subtitle: const Text('Only the Google Drive copy is deleted. The original on your phone is not touched. If the download is interrupted or cannot be verified, the Drive copy is kept.'),
+                    ),
                     if (!paid)
                       FilledButton.icon(
                         onPressed: _busy || _uploading ? null : _startPayment,
@@ -544,7 +565,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     else
                       OutlinedButton.icon(
-                        onPressed: _busy || _uploading ? null : _makeShareLink,
+                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _makeShareLink,
                         icon: const Icon(Icons.link),
                         label: const Text('Create / refresh private link'),
                       ),
@@ -617,7 +638,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 10),
                         const Text('Download complete!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: burgundy)),
                         const SizedBox(height: 6),
-                        const Text('Thank you for sharing your special day. The full video transfer was verified by our server. Your Google Drive copy remains saved until you choose to delete it.'),
+                        const Text('Thank you for sharing your special day. The server verified the full video transfer. Your Google Drive copy is automatically deleted when you gave consent; your phone original remains untouched.'),
                         const SizedBox(height: 12),
                         OutlinedButton.icon(
                           onPressed: () => setState(() => _selectedTab = 1),
