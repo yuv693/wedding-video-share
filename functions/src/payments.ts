@@ -217,6 +217,17 @@ export const razorpayWebhook = onRequest(
       });
       response.status(200).json({ ok: true, received: true });
     } catch (error) {
+      // Razorpay may retry or deliver the same event concurrently. Payment
+      // verification is transactional and idempotent; if another invocation
+      // already recorded this event, acknowledge the duplicate instead of
+      // returning 500 and causing an endless retry loop.
+      if (eventRef) {
+        const recorded = await eventRef.get().catch(() => null);
+        if (recorded?.exists) {
+          response.status(200).json({ ok: true, duplicate: true });
+          return;
+        }
+      }
       console.error("Razorpay webhook processing failed", error);
       response.status(500).json({ error: "Webhook processing failed" });
     }
