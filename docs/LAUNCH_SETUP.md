@@ -25,6 +25,7 @@ This is separate from customer account recovery. It grants access to the custome
 4. Set the Drive OAuth web client redirect URI to:
 https://mnaswhizatnwfwmjmtvm.supabase.co/functions/v1/google-drive-oauth
 5. Before real customers connect Drive, replace GOOGLE_TOKEN_ENCRYPTION_KEY in Supabase Edge Function Secrets with a fresh cryptographically random 32-byte base64 value. Do not reuse the old key or share it in chat.
+   - Current Supabase logs show Google's `invalid_client` response: the saved `GOOGLE_CLIENT_SECRET` is invalid for the configured OAuth client. Replace it with the current client secret from the same Google Cloud OAuth Web client whose ID is stored as `GOOGLE_CLIENT_ID`; then retry Drive connection. Never paste either secret into chat.
 6. Complete Google's OAuth consent-screen production verification as required.
 7. Test Drive connection/return, account email, quota, folder creation, upload and delete on a real Android device.
 
