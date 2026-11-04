@@ -254,7 +254,7 @@ export const resumeGoogleDriveUpload = onRequest(
       });
       if (probe.status === 308) {
         const range = probe.headers.get("range") ?? "";
-        const match = /^bytes=0-(\\d+)$/.exec(range);
+        const match = /^bytes=0-(\d+)$/.exec(range);
         const resumeOffset = match ? Number(match[1]) + 1 : 0;
         if (!Number.isSafeInteger(resumeOffset) || resumeOffset > expectedSizeBytes) {
           throw new HttpsError("data-loss", "Google Drive returned an invalid upload offset.");
