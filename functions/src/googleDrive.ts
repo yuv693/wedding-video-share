@@ -147,14 +147,17 @@ export async function getGoogleDriveAccessToken(uid: string): Promise<{ accessTo
 const MAX_VIDEO_BYTES = 40_000_000_000;
 function safeFilename(value: unknown): string {
   const name = String(value ?? "").trim();
-  if (!name || name.length > 240 || /[\\/\\x00-\\x1f]/.test(name)) {
+  if (!name || name.length > 240 || name.includes("/") || name.includes("\\") || /[\x00-\x1f]/.test(name)) {
     throw new HttpsError("invalid-argument", "A valid video filename is required.");
   }
   return name;
 }
 function safeMime(value: unknown): string {
   const mime = String(value ?? "application/octet-stream");
-  if (!/^[a-z0-9.+-]+\\/[a-z0-9.+-]+$/i.test(mime)) {
+  const slash = mime.indexOf("/");
+  if (slash <= 0 || slash !== mime.lastIndexOf("/") ||
+      !/^[a-z0-9.+-]+$/i.test(mime.slice(0, slash)) ||
+      !/^[a-z0-9.+-]+$/i.test(mime.slice(slash + 1))) {
     throw new HttpsError("invalid-argument", "Invalid video MIME type.");
   }
   return mime;
