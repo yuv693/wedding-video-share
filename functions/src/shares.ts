@@ -216,7 +216,8 @@ export const weddingShareWorkerControl = onRequest(
                 freshDownload.get("transferVerified") !== true ||
                 freshDownload.get("bytesTransferred") !== freshDownload.get("bytesExpected") ||
                 !freshVideo.get("autoDeleteConsentAt")) return false;
-            if (freshVideo.get("uploadStatus") === "deleted") return true;
+            if (freshVideo.get("uploadStatus") === "deleted" ||
+                freshVideo.get("uploadStatus") === "deletion_pending") return true;
             if (freshVideo.get("uploadStatus") !== "uploaded") return false;
             tx.update(videoRef, { uploadStatus: "deletion_pending", updatedAt: FieldValue.serverTimestamp() });
             return true;
@@ -261,6 +262,15 @@ export const weddingShareWorkerControl = onRequest(
           });
           res.json({ ok: true, completed: true, deleted: true });
         } catch {
+          // A transient token/network/Firestore failure must not strand the
+          // video in deletion_pending. If Google actually deleted it despite a
+          // lost response, a retry will receive 404 and safely finalize.
+          await db.runTransaction(async tx => {
+            const freshVideo = await tx.get(videoRef);
+            if (freshVideo.exists && freshVideo.get("uploadStatus") === "deletion_pending") {
+              tx.update(videoRef, { uploadStatus: "uploaded", updatedAt: FieldValue.serverTimestamp() });
+            }
+          }).catch(() => {});
           res.json({ ok: true, completed: true, deleted: false, deleteReason: "GOOGLE_DRIVE_DELETE_FAILED" });
         }
         return;
