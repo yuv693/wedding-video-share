@@ -21,3 +21,11 @@ android/key.properties
 # OS
 .DS_Store
 Thumbs.db
+
+# Firebase / Node.js
+.firebase/
+functions/node_modules/
+functions/lib/
+functions/*.log
+*-service-account*.json
+service-account*.json
