@@ -11,7 +11,6 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   supabase_flutter: ^2.8.0
-  firebase_core: ^3.15.2
   app_links: ^6.4.0
   url_launcher: ^6.3.1
   razorpay_flutter: ^1.4.0
