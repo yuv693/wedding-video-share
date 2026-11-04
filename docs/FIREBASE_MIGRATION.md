@@ -28,6 +28,12 @@ The Firebase functions in this branch are the first server-side Firestore layer;
 
 The Android build workflow compiles the Firebase Functions TypeScript source. The separate manual deployment workflow requires the GitHub secret above. Functions deployment can require the Firebase project to be on the Blaze billing plan; set a budget alert first.
 
+## Existing customer recovery during the bridge
+
+While still signed in on the current phone, open **Account → Protect your account**, verify the existing recovery email if needed, and set the Firebase recovery password. The app links that email/password to the Firebase anonymous account. On a replacement phone, the recovery flow restores the legacy Supabase session with its email code and the Firebase session with the password. A customer who has not linked Firebase on the old phone cannot recover that Firebase identity on a new phone yet.
+
 ## Data migration
+
+The current Supabase operational tables were checked before migration: wedding orders, videos, notifications, payment transactions, share links, receiver downloads and audit events are all empty. The Supabase Auth project has 10 identities (9 anonymous and 1 with a confirmed email). Do not copy Supabase password hashes into Firebase. Existing signed-in customers must link a Firebase credential on their current device, or use a deliberate re-verification/reset process.
 
 Existing Supabase customer/order/video IDs must be mapped to Firebase UIDs before production cutover. Do not assume Firebase UIDs equal Supabase user IDs. Export/import must preserve the one-video-per-account rule, payment verification history, Drive OAuth ownership mapping, consent timestamps, share-link state, download attempts and audit records. Keep the old Supabase project intact until reconciliation is complete.
