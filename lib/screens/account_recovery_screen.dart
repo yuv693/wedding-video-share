@@ -56,6 +56,10 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
   Future<void> _verifyCode() async {
     final email = _email.text.trim().toLowerCase();
     final code = _code.text.trim();
+    if (_password.text.length < 6) {
+      setState(() => _error = 'Enter your Firebase recovery password.');
+      return;
+    }
     if (!RegExp(r'^\d{6}$').hasMatch(code)) {
       setState(() => _error = 'Enter the 6-digit code from your email.');
       return;
