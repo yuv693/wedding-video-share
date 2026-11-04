@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'services/firebase_backend.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -111,6 +112,7 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _connectDriveForExistingCustomer() async {
     try {
+      await FirebaseBackend.signInAnonymouslyIfNeeded();
       final quota = await supabase.functions.invoke(
         'google-drive-storage',
         body: {'action': 'quota'},
@@ -130,6 +132,7 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _getStarted() async {
     setState(() { _starting = true; _error = null; });
     try {
+      await FirebaseBackend.signInAnonymouslyIfNeeded();
       if (supabase.auth.currentSession == null) {
         await supabase.auth.signInAnonymously();
       }
