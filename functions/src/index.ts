@@ -5,6 +5,14 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 initializeApp();
 const db = getFirestore();
 
+function wire(value: any): any {
+  if (value == null) return value;
+  if (typeof value?.toDate === 'function') return value.toDate().toISOString();
+  if (Array.isArray(value)) return value.map(wire);
+  if (typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, wire(item)]));
+  return value;
+}
+
 function requireUid(request: { auth?: { uid: string } | null }): string {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Please sign in to continue.");
@@ -68,9 +76,9 @@ export const getWeddingAccountState = onCall(async (request) => {
       .orderBy("createdAt", "desc").limit(5).get(),
   ]);
   return {
-    order: order.exists ? order.data() : null,
-    video: videos.empty ? null : { id: videos.docs[0].id, ...videos.docs[0].data() },
-    notifications: notifications.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+    order: order.exists ? wire(order.data()) : null,
+    video: videos.empty ? null : wire({ id: videos.docs[0].id, ...videos.docs[0].data() }),
+    notifications: notifications.docs.map((doc) => wire({ id: doc.id, ...doc.data() })),
   };
 });
 
