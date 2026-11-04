@@ -25,6 +25,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
   bool _sent = false;
   bool _busy = false;
   String? _error;
+  String? _notice;
 
   @override
   void dispose() {
@@ -40,7 +41,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
       setState(() => _error = 'Enter the email address linked to your account.');
       return;
     }
-    setState(() { _busy = true; _error = null; });
+    setState(() { _busy = true; _error = null; _notice = null; });
     try {
       await supabase.auth.signInWithOtp(email: email, shouldCreateUser: false);
       if (mounted) setState(() => _sent = true);
@@ -58,7 +59,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
     setState(() { _busy = true; _error = null; });
     try {
       await FirebaseBackend.sendPasswordResetEmail(email);
-      if (mounted) setState(() => _error = 'Firebase password reset email sent. Check your inbox, reset it, then return here.');
+      if (mounted) setState(() => _notice = 'Firebase password reset email sent. Check your inbox, reset it, then return here.');
     } catch (e) {
       if (mounted) setState(() => _error = 'Could not send password reset email: $e');
     } finally {
@@ -179,6 +180,10 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
                       onPressed: _busy ? null : _resetFirebasePassword,
                       child: const Text('Forgot Firebase password? Send reset email'),
                     ),
+                  ],
+                  if (_notice != null) ...[
+                    const SizedBox(height: 12),
+                    Text(_notice!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.green)),
                   ],
                   if (_error != null) ...[
                     const SizedBox(height: 12),
