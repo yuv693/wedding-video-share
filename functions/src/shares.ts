@@ -206,17 +206,42 @@ export const weddingShareWorkerControl = onRequest(
           res.json({ ok: true, completed: true, deleted: true }); return;
         }
         try {
+          // Reserve the consented deletion atomically before calling Google.
+          // Consent withdrawal rejects deletion_pending, closing the race where
+          // a customer could revoke consent while the Drive DELETE was in flight.
+          const deletionAllowed = await db.runTransaction(async tx => {
+            const [freshVideo, freshDownload] = await Promise.all([tx.get(videoRef), tx.get(downloadRef)]);
+            if (!freshVideo.exists || !freshDownload.exists ||
+                freshDownload.get("status") !== "completed" ||
+                freshDownload.get("transferVerified") !== true ||
+                freshDownload.get("bytesTransferred") !== freshDownload.get("bytesExpected") ||
+                !freshVideo.get("autoDeleteConsentAt")) return false;
+            if (freshVideo.get("uploadStatus") === "deleted") return true;
+            if (freshVideo.get("uploadStatus") !== "uploaded") return false;
+            tx.update(videoRef, { uploadStatus: "deletion_pending", updatedAt: FieldValue.serverTimestamp() });
+            return true;
+          });
+          if (!deletionAllowed) {
+            res.json({ ok: true, completed: true, deleted: false, deleteReason: "CONSENT_OR_STATE_CHANGED" }); return;
+          }
           const { accessToken } = await getGoogleDriveAccessToken(String(snap.get("customerUid")));
           const deletion = await fetch(
             "https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(String(video.get("googleDriveFileId"))),
             { method: "DELETE", headers: { Authorization: "Bearer " + accessToken } },
           );
           if (!deletion.ok && deletion.status !== 404) {
+            await db.runTransaction(async tx => {
+              const freshVideo = await tx.get(videoRef);
+              if (freshVideo.exists && freshVideo.get("uploadStatus") === "deletion_pending") {
+                tx.update(videoRef, { uploadStatus: "uploaded", updatedAt: FieldValue.serverTimestamp() });
+              }
+            });
             res.json({ ok: true, completed: true, deleted: false, deleteReason: "GOOGLE_DRIVE_DELETE_FAILED" }); return;
           }
           await db.runTransaction(async tx => {
             const [freshVideo, freshDownload] = await Promise.all([tx.get(videoRef), tx.get(downloadRef)]);
             if (!freshVideo.exists || !freshDownload.exists ||
+                freshVideo.get("uploadStatus") !== "deletion_pending" ||
                 freshDownload.get("status") !== "completed" ||
                 freshDownload.get("transferVerified") !== true ||
                 freshDownload.get("bytesTransferred") !== freshDownload.get("bytesExpected") ||
