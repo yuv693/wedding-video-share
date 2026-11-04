@@ -434,12 +434,28 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Account'),
         ],
       ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refresh,
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          const Positioned.fill(
+            child: Opacity(
+              opacity: 0.16,
+              child: Image(
+                image: AssetImage('assets/wedding_photo.jpg'),
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+              ),
+            ),
+          ),
+          const Positioned.fill(
+            child: ColoredBox(color: Color(0xDFFFF8EC)),
+          ),
+          SafeArea(
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
               if (_selectedTab == 0) ...[
               Container(
                 padding: const EdgeInsets.all(22),
@@ -752,10 +768,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               ],
-            ],
-          ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ),
-    );
+      );
   }
 }
