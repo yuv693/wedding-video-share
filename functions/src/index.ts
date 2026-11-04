@@ -4,6 +4,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { setGlobalOptions } from "firebase-functions/v2";
 export { createRazorpayOrder, verifyRazorpayPayment, razorpayWebhook } from "./payments";
 export { startGoogleDriveOAuth, googleDriveOAuthCallback, getGoogleDriveConnection, startGoogleDriveUpload, resumeGoogleDriveUpload, finalizeGoogleDriveUpload } from "./googleDrive";
+export { createWeddingShare, weddingShareWorkerControl, weddingShareRedirect } from "./shares";
 
 if (!getApps().length) initializeApp();
 setGlobalOptions({ region: "asia-south1" });
