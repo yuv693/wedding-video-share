@@ -191,23 +191,19 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     setState(() { _busy = true; _status = null; });
     try {
-      final response = await supabase.functions.invoke('razorpay-payments', body: {'action': 'create_order'});
-      final data = _map(response.data);
-      if (response.status != 200 || data['ok'] != true) {
-        throw Exception(data['note']?.toString() ?? data['error']?.toString() ?? 'Payment setup is not ready.');
-      }
+      final data = await _firebaseWedding.createRazorpayOrder();
       final keyId = data['keyId']?.toString();
       final gatewayOrderId = data['razorpayOrderId']?.toString();
-      if (keyId == null || gatewayOrderId == null) throw Exception('Payment order details were incomplete.');
+      if (data['ok'] != true || keyId == null || gatewayOrderId == null) {
+        throw Exception(data['error']?.toString() ?? 'Payment setup is not ready.');
+      }
       _razorpay.open({
-        'key': keyId,
-        'amount': 29000,
-        'currency': 'INR',
+        'key': keyId, 'amount': 29000, 'currency': 'INR',
         'name': 'Wedding Video Share',
         'description': 'One wedding video upload and share',
         'order_id': gatewayOrderId,
         'prefill': {
-          'email': supabase.auth.currentUser?.email ?? '',
+          'email': FirebaseBackend.currentUser?.email ?? supabase.auth.currentUser?.email ?? '',
           'contact': supabase.auth.currentUser?.phone ?? '',
         },
         'theme': {'color': '#6F2438'},
@@ -219,10 +215,28 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _onPaymentSuccess(PaymentSuccessResponse response) {
+  Future<void> _onPaymentSuccess(PaymentSuccessResponse response) async {
     if (!mounted) return;
-    setState(() => _status = 'Payment submitted. Waiting for secure server verification…');
-    unawaited(_pollPaymentVerification());
+    setState(() => _status = 'Payment submitted. Verifying securely with Firebase and Razorpay…');
+    try {
+      final orderId = response.orderId;
+      final paymentId = response.paymentId;
+      final signature = response.signature;
+      if (orderId == null || paymentId == null || signature == null) {
+        throw Exception('Razorpay did not return complete verification details.');
+      }
+      await _firebaseWedding.verifyRazorpayPayment(
+        razorpayOrderId: orderId,
+        razorpayPaymentId: paymentId,
+        razorpaySignature: signature,
+      );
+      await _refresh();
+      if (!mounted) return;
+      setState(() => _status = 'Payment verified. Creating your private share link…');
+      await _makeShareLink();
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Payment verification: $e. Tap Refresh before retrying.');
+    }
   }
 
   Future<void> _pollPaymentVerification() async {
@@ -258,40 +272,29 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     setState(() { _busy = true; _status = null; _uploadProgress = 0; });
     try {
-      if (_order == null) {
-        final prepared = await supabase.functions.invoke('razorpay-payments', body: {'action': 'prepare_upload'});
-        final preparedData = _map(prepared.data);
-        if (prepared.status != 200 || preparedData['ok'] != true) {
-          throw Exception(preparedData['note']?.toString() ?? preparedData['error']?.toString() ?? 'Could not prepare your upload.');
-        }
-        await _loadOrder();
-      }
-      if (_order == null) throw Exception('Your wedding upload could not be prepared. Please refresh and try again.');
+      final prepared = await _firebaseWedding.prepareWeddingUpload();
+      if (prepared['ok'] != true) throw Exception('Could not prepare your Firebase wedding upload.');
+      await _loadOrder();
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.video,
-        allowMultiple: false,
-        withReadStream: true,
-        withData: false,
+        type: FileType.video, allowMultiple: false, withReadStream: true, withData: false,
       );
       if (result == null || result.files.isEmpty) return;
       final file = result.files.single;
       if (!mounted) return;
       setState(() { _uploading = true; _busy = false; _status = 'Uploading ${file.name}…'; });
+      final uid = FirebaseBackend.currentUser?.uid;
+      if (uid == null) throw Exception('Firebase customer account is not signed in.');
       await _uploadService.upload(
-        orderId: _order!['id'].toString(),
-        file: file,
-        onProgress: (value) {
-          if (mounted) setState(() => _uploadProgress = value);
-        },
+        orderId: uid, file: file,
+        onProgress: (value) { if (mounted) setState(() => _uploadProgress = value); },
       );
       if (!mounted) return;
       setState(() {
-        _shareUrl = null;
-        _sharePin = null;
-        _status = 'Video uploaded successfully. Pay ₹290 when you are ready to share it.';
+        _shareUrl = null; _sharePin = null;
+        _status = 'Video uploaded and verified in Google Drive. Pay ₹290 when you are ready to share it.';
         _uploading = false;
       });
-      await _loadOrder();
+      await _refresh();
     } catch (e) {
       if (mounted) {
         setState(() { _status = 'Upload: $e'; _uploading = false; });
@@ -307,18 +310,14 @@ class _HomeScreenState extends State<HomeScreen> {
     final previous = _autoDeleteConsent;
     setState(() { _autoDeleteConsent = consent; _status = null; });
     try {
-      final response = await supabase.functions.invoke('google-drive-storage', body: {
-        'action': 'set_auto_delete_consent',
-        'videoId': _video!['id'],
-        'consent': consent,
-      });
-      final data = _map(response.data);
-      if (response.status != 200 || data['ok'] != true) {
-        throw Exception(data['error']?.toString() ?? 'Could not update automatic deletion consent.');
-      }
+      final result = await _firebaseWedding.setAutoDeleteConsent(
+        videoId: _video!['id'].toString(), consent: consent,
+      );
+      if (result['ok'] != true) throw Exception('Could not save your consent choice.');
       if (mounted) setState(() => _status = consent
         ? 'Automatic Google Drive deletion is enabled after the receiver’s full verified download.'
         : 'Automatic Google Drive deletion consent has been withdrawn. Your Drive copy will be kept.');
+      await _refresh();
     } catch (e) {
       if (mounted) setState(() { _autoDeleteConsent = previous; _status = 'Consent update: $e'; });
     }
@@ -336,25 +335,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     setState(() { _busy = true; _status = null; });
     try {
-      final consentResponse = await supabase.functions.invoke('google-drive-storage', body: {
-        'action': 'set_auto_delete_consent',
-        'videoId': _video!['id'],
-        'consent': true,
-      });
-      final consentData = _map(consentResponse.data);
-      if (consentResponse.status != 200 || consentData['ok'] != true) {
-        throw Exception(consentData['error']?.toString() ?? 'Could not save automatic deletion consent.');
-      }
-      final response = await supabase.functions.invoke('wedding-share', body: {
-        'action': 'create_share',
-        'orderId': _order!['id'],
-      });
-      final data = _map(response.data);
+      final data = await _firebaseWedding.createWeddingShare();
       final url = data['shareUrl']?.toString();
-      if (response.status != 200 || data['ok'] != true || url == null) {
+      if (data['ok'] != true || url == null) {
         throw Exception(data['error']?.toString() ?? 'Could not create the private link.');
       }
-      if (mounted) setState(() { _shareUrl = url; _sharePin = data['downloadPin']?.toString(); _status = 'Private link and 6-digit download password are ready. Send them separately.'; });
+      if (mounted) setState(() {
+        _shareUrl = url; _sharePin = data['downloadPin']?.toString();
+        _status = 'Private link and 6-digit download password are ready. Send them separately.';
+      });
     } catch (e) {
       if (mounted) setState(() => _status = 'Share link: $e');
     } finally {
@@ -628,10 +617,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ],
                     const SizedBox(height: 14),
-                    OutlinedButton.icon(
-                      onPressed: _busy || _uploading ? null : _deleteDriveCopy,
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('Delete my Google Drive copy'),
+                    const Text(
+                      'Your Google Drive copy is managed securely by the verified download process.',
+                      style: TextStyle(color: Colors.black54, fontSize: 12),
                     ),
                     const SizedBox(height: 6),
                     const Text(
