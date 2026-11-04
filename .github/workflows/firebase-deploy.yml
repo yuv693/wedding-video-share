@@ -11,8 +11,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Firebase implementation
         uses: actions/checkout@v4
+        with:
+          ref: firebase-auth-firestore-migration
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
