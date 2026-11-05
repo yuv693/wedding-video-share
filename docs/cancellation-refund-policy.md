@@ -23,7 +23,7 @@ Refund requests are reviewed based on the transaction status, whether the sharin
 If the sharing link has not yet been issued, contact support promptly and include your order reference. If the link has already been issued or the download has started/completed, explain the circumstances; the request will be reviewed under applicable law and the facts of the case.
 
 ## How to request help
-Contact: **[Add your monitored support email before public launch]**
+Email: **ym6250067@gmail.com**
 
 Include your Wedding Video Share order ID and Razorpay payment ID, if available. Do not include full card details, UPI PINs, passwords or OTPs.
 
