@@ -37,11 +37,17 @@ These are implemented UI/code paths, not proof that every third-party integratio
 ## Launch checklist
 - [Provider setup and Play Store launch checklist](docs/LAUNCH_SETUP.md)
 
-## Legal drafts
+## Legal and public information pages
+
 - [Privacy Policy](docs/privacy-policy.md)
 - [Terms of Service](docs/terms-of-service.md)
+- [Cancellation & Refund Policy](docs/cancellation-refund-policy.md)
+- [Pricing](docs/pricing.md)
+- [About Us](docs/about-us.md)
+- [Contact Us](docs/contact-us.md)
 
-These are draft documents. Add a monitored support contact, publish stable public URLs and obtain legal review before release.
+The repository also contains a GitHub Pages landing page at `index.html`. These are publication drafts. Add a monitored support email and valid business/correspondence address where required, confirm refund handling, enable GitHub Pages, and obtain legal review before public launch.
+
 
 ## Still required before public launch
 - Confirm Supabase anonymous sign-in, manual identity linking, email provider, SMTP and six-digit OTP templates.
