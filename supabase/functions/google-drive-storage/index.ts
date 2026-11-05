@@ -54,6 +54,19 @@ async function getGoogleAccessToken(admin: any, customerId: string) {
   return { accessToken: tokenData.access_token as string, email: row.google_account_email as string, folderId: row.google_drive_folder_id as string | null };
 }
 
+function googleApiDiagnostic(label: string, status: number, data: any) {
+  const apiError = data?.error;
+  const first = Array.isArray(apiError?.errors) ? apiError.errors[0] : null;
+  console.error("GOOGLE_DRIVE_API_ERROR", JSON.stringify({
+    operation: label,
+    http_status: status,
+    code: typeof apiError?.code === "number" ? apiError.code : null,
+    status: typeof apiError?.status === "string" ? apiError.status : null,
+    reason: typeof first?.reason === "string" ? first.reason : null,
+    message: typeof apiError?.message === "string" ? apiError.message.slice(0, 240) : null,
+  }));
+}
+
 async function driveRequest(url: string, accessToken: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   headers.set("Authorization", "Bearer " + accessToken);
@@ -136,7 +149,7 @@ Deno.serve((req) => {
       if (body.action === "quota") {
         const res = await driveRequest("https://www.googleapis.com/drive/v3/about?fields=user(emailAddress),storageQuota(limit,usage,usageInDrive,usageInDriveTrash)", accessToken);
         const data = await res.json();
-        if (!res.ok || !data.storageQuota) throw new Error("DRIVE_QUOTA_UNAVAILABLE");
+        if (!res.ok || !data.storageQuota) { googleApiDiagnostic("quota", res.status, data); throw new Error("DRIVE_QUOTA_UNAVAILABLE"); }
         const limit = data.storageQuota.limit ? Number(data.storageQuota.limit) : null;
         const usage = Number(data.storageQuota.usage ?? 0);
         return json({ ok: true, email, quotaBytes: limit, usedBytes: usage, availableBytes: limit === null ? null : Math.max(0, limit - usage), appMaxUploadBytes: MAX_BYTES });
@@ -161,7 +174,7 @@ Deno.serve((req) => {
         if (existingVideo) throw new Error("VIDEO_ALREADY_EXISTS");
         const quotaRes = await driveRequest("https://www.googleapis.com/drive/v3/about?fields=storageQuota(limit,usage)", accessToken);
         const quota = await quotaRes.json();
-        if (!quotaRes.ok || !quota.storageQuota) throw new Error("DRIVE_QUOTA_UNAVAILABLE");
+        if (!quotaRes.ok || !quota.storageQuota) { googleApiDiagnostic("start_upload_quota", quotaRes.status, quota); throw new Error("DRIVE_QUOTA_UNAVAILABLE"); }
         if (quota.storageQuota.limit) {
           const available = Number(quota.storageQuota.limit) - Number(quota.storageQuota.usage ?? 0);
           if (available < size) throw new Error("INSUFFICIENT_DRIVE_SPACE");
