@@ -88,14 +88,6 @@ Deno.serve(async (req) => {
     try {
       const customerId = ctx.userClaims.sub;
       const admin = adminClient();
-      const { data: authData, error: authError } = await admin.auth.admin.getUserById(customerId);
-      if (authError || !authData.user?.email_confirmed_at) {
-        if (authError) console.error("ACCOUNT_RECOVERY_LOOKUP_FAILED", authError.name, authError.status);
-        return json({
-          error: "ACCOUNT_RECOVERY_REQUIRED",
-          note: "Verify a recovery email in Account before uploading or paying for this wedding.",
-        }, 403);
-      }
       let { data: order, error: orderError } = await admin.from("wedding_orders").select("id,payment_status,upload_locked").eq("customer_id", customerId).maybeSingle();
       if (orderError) throw new Error("ORDER_LOOKUP_FAILED");
 
@@ -124,7 +116,7 @@ Deno.serve(async (req) => {
       const cfg = config();
       // Reuse a recent pending gateway order so repeated taps cannot create multiple payable orders.
       const { data: pendingTx, error: pendingTxError } = await admin.from("payment_transactions")
-        .select("gateway_order_id,created_at")
+        .select("gateway_order_id,created_at,amount_paise,currency")
         .eq("order_id", order.id)
         .eq("customer_id", customerId)
         .eq("gateway", "razorpay")
@@ -134,7 +126,7 @@ Deno.serve(async (req) => {
         .limit(1)
         .maybeSingle();
       if (pendingTxError) throw new Error("PAYMENT_RECORD_LOOKUP_FAILED");
-      if (pendingTx?.gateway_order_id) {
+      if (pendingTx?.gateway_order_id && Number(pendingTx.amount_paise) === 29000 && pendingTx.currency === "INR") {
         return json({ ok: true, gateway: "razorpay", keyId: cfg.keyId, razorpayOrderId: pendingTx.gateway_order_id, orderId: order.id, amountPaise: 29000, currency: "INR", name: "Wedding Video Share", description: "One wedding video upload and share" });
       }
 
