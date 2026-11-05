@@ -177,10 +177,6 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _status = 'Upload your wedding video first. Payment is needed when you share it.');
       return;
     }
-    if (supabase.auth.currentUser?.emailConfirmedAt == null) {
-      setState(() { _selectedTab = 2; _status = 'Verify your recovery email before payment so you can recover this customer account later.'; });
-      return;
-    }
     setState(() { _busy = true; _status = null; });
     try {
       final response = await supabase.functions.invoke('razorpay-payments', body: {'action': 'create_order'});
@@ -240,10 +236,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _chooseAndUpload() async {
-    if (supabase.auth.currentUser?.emailConfirmedAt == null) {
-      setState(() { _selectedTab = 2; _status = 'Verify your recovery email before uploading so your account can be recovered later.'; });
-      return;
-    }
     if (_order?['upload_locked'] == true || _video != null) {
       setState(() => _status = 'This account has already used its one video slot. Create a new account for another wedding.');
       return;
