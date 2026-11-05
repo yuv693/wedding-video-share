@@ -16,6 +16,7 @@ dependencies:
   razorpay_flutter: ^1.4.0
   file_picker: ^10.3.5
   http: ^1.2.2
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:
