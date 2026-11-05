@@ -50,7 +50,15 @@ async function getGoogleAccessToken(admin: any, customerId: string) {
     body: new URLSearchParams({ client_id: cfg.clientId, client_secret: cfg.clientSecret, refresh_token: refreshToken, grant_type: "refresh_token" }),
   });
   const tokenData = await tokenResponse.json();
-  if (!tokenResponse.ok || typeof tokenData.access_token !== "string") throw new Error("GOOGLE_ACCESS_TOKEN_REFRESH_FAILED");
+  if (!tokenResponse.ok || typeof tokenData.access_token !== "string") {
+    console.error("GOOGLE_TOKEN_REFRESH_ERROR", JSON.stringify({
+      http_status: tokenResponse.status,
+      oauth_error: typeof tokenData.error === "string" ? tokenData.error : null,
+      oauth_error_description: typeof tokenData.error_description === "string" ? tokenData.error_description.slice(0, 180) : null,
+      access_token_present: typeof tokenData.access_token === "string",
+    }));
+    throw new Error("GOOGLE_ACCESS_TOKEN_REFRESH_FAILED");
+  }
   return { accessToken: tokenData.access_token as string, email: row.google_account_email as string, folderId: row.google_drive_folder_id as string | null };
 }
 
