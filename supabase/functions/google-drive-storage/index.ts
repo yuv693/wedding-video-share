@@ -142,10 +142,6 @@ Deno.serve((req) => {
       }
 
       if (body.action === "resume_upload") {
-        const { data: authData, error: authError } = await admin.auth.admin.getUserById(customerId);
-        if (authError || !authData.user?.email_confirmed_at) {
-          return json({ ok: false, error: "ACCOUNT_RECOVERY_REQUIRED", note: "Verify a recovery email before continuing this upload." }, 403);
-        }
         const orderId = String(body.orderId ?? "");
         if (!orderId) throw new Error("ORDER_NOT_FOUND");
         const { data: order, error: orderError } = await admin.from("wedding_orders").select("id,customer_id,payment_status,upload_locked").eq("id", orderId).eq("customer_id", customerId).maybeSingle();
@@ -168,10 +164,6 @@ Deno.serve((req) => {
       }
 
       if (body.action === "start_upload") {
-        const { data: authData, error: authError } = await admin.auth.admin.getUserById(customerId);
-        if (authError || !authData.user?.email_confirmed_at) {
-          return json({ ok: false, error: "ACCOUNT_RECOVERY_REQUIRED", note: "Verify a recovery email before uploading this wedding video." }, 403);
-        }
         const orderId = String(body.orderId ?? "");
         const filename = String(body.filename ?? "").trim().slice(0, 240);
         const size = Number(body.sizeBytes);
@@ -213,10 +205,6 @@ Deno.serve((req) => {
       }
 
       if (body.action === "finalize_upload") {
-        const { data: authData, error: authError } = await admin.auth.admin.getUserById(customerId);
-        if (authError || !authData.user?.email_confirmed_at) {
-          return json({ ok: false, error: "ACCOUNT_RECOVERY_REQUIRED", note: "Verify your recovery email before finalizing this upload." }, 403);
-        }
         const orderId = String(body.orderId ?? "");
         const fileId = String(body.fileId ?? "");
         if (!orderId || !fileId || !/^[\w-]{10,}$/.test(fileId)) throw new Error("DRIVE_FILE_NOT_VERIFIED");
