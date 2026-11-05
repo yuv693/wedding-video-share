@@ -29,6 +29,8 @@ jobs:
         with:
           source: ./
           destination: ./_site
+      - name: Ensure owner dashboard is published
+        run: cp admin.html ./_site/admin.html
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
