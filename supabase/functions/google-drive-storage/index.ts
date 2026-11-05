@@ -115,7 +115,11 @@ Deno.serve((req) => {
   const handler = withSupabase({ auth: "user" }, async (request, ctx) => {
     try {
       const body = await request.json();
-      const customerId = ctx.userClaims.sub;
+      const customerId = ctx.userClaims?.id;
+      if (typeof customerId !== "string" || !customerId) {
+        console.error("STORAGE_USER_ID_MISSING");
+        return json({ ok: false, error: "AUTH_USER_ID_MISSING" }, 401);
+      }
       const admin = adminClient();
       const { accessToken, email, folderId: existingFolder } = await getGoogleAccessToken(admin, customerId);
 
