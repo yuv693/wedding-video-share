@@ -86,7 +86,8 @@ Deno.serve(async (req) => {
 
   const handler = withSupabase({ auth: "user" }, async (_request, ctx) => {
     try {
-      const customerId = ctx.userClaims.sub;
+      const customerId = ctx.userClaims?.id;
+      if (typeof customerId !== "string" || !customerId) throw new Error("AUTH_USER_ID_MISSING");
       const admin = adminClient();
       let { data: order, error: orderError } = await admin.from("wedding_orders").select("id,payment_status,upload_locked").eq("customer_id", customerId).maybeSingle();
       if (orderError) throw new Error("ORDER_LOOKUP_FAILED");
