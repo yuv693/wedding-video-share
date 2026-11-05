@@ -13,6 +13,6 @@ Guests use the link and PIN to download the video. The service checks the number
 The customer keeps control of the video in their own Google Drive. The app never deletes the original video on the customer's phone. Automatic deletion of the service's Drive copy happens only when the customer has separately consented and the server verifies completion.
 
 **Service:** Wedding Video Share  
-**Support:** [Add a monitored support email before public launch]
+**Support:** ym6250067@gmail.com
 
 We aim to make private wedding-video sharing straightforward while clearly explaining the one-video plan, payment and download process.
