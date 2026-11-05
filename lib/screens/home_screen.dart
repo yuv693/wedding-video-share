@@ -410,7 +410,6 @@ class _HomeScreenState extends State<HomeScreen> {
     const burgundy = Color(0xFF6F2438);
     final user = supabase.auth.currentUser;
     final paid = _order?['payment_status'] == 'paid';
-    final accountProtected = supabase.auth.currentUser?.emailConfirmedAt != null;
     final locked = _order?['upload_locked'] == true;
     final videoReady = _video?['upload_status'] == 'uploaded';
     final videoDeleted = _video?['upload_status'] == 'deleted';
@@ -471,20 +470,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 12),
                   if (paid)
                     const Row(children: [Icon(Icons.verified, color: Colors.green), SizedBox(width: 8), Text('Payment verified by server')])
-                  else if (!accountProtected)
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Verify your recovery email before uploading.'),
-                        const SizedBox(height: 8),
-                        OutlinedButton(
-                          onPressed: () => setState(() => _selectedTab = 2),
-                          child: const Text('Verify recovery email'),
-                        ),
-                      ],
-                    )
                   else
-                    const Text('Upload your wedding video first. Pay ₹290 only when you are ready to share it.'),
+                    const Text('Upload your wedding video first. Pay ₹290 only when you are ready to share it.\nRecovery email is optional.'),
                   if (_order != null) ...[
                     const SizedBox(height: 8),
                     Text('Order status: ${_order!['payment_status'] ?? 'pending'}'),
