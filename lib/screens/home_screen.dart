@@ -4,7 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
@@ -18,11 +18,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final _razorpay = Razorpay();
   final _uploadService = VideoUploadService();
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
   bool _busy = false, _uploading = false, _autoDeleteConsent = false;
+  String? _manualPaymentStatus;
   int _selectedTab = 0;
   double _uploadProgress = 0;
   String? _status, _driveEmail, _shareUrl, _sharePin;
@@ -32,9 +32,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _onPaymentSuccess);
-    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _onPaymentError);
-    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _onExternalWallet);
     _linkSubscription = _appLinks.uriLinkStream.listen(_handleIncomingLink);
     unawaited(_loadInitialLink());
     _refresh();
@@ -43,7 +40,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _linkSubscription?.cancel();
-    _razorpay.clear();
     super.dispose();
   }
 
@@ -96,6 +92,7 @@ class _HomeScreenState extends State<HomeScreen> {
     await _loadOrder();
     await _loadQuota();
     await _loadNotifications();
+    await _loadManualPaymentStatus();
   }
 
   Future<void> _loadOrder() async {
@@ -172,67 +169,136 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _loadManualPaymentStatus() async {
+    try {
+      final response = await supabase.functions.invoke('manual-payments', body: {'action': 'status'});
+      final data = _map(response.data);
+      if (response.status == 200 && mounted) {
+        setState(() => _manualPaymentStatus = data['status']?.toString());
+      }
+    } catch (_) {
+      // Payment status remains protected by the server; refresh can retry.
+    }
+  }
+
   Future<void> _startPayment() async {
     if (_video?['upload_status'] != 'uploaded' || _order == null) {
       setState(() => _status = 'Upload your wedding video first. Payment is needed when you share it.');
       return;
     }
+    if (_manualPaymentStatus == 'pending') {
+      setState(() => _status = 'Your UPI payment details are already submitted. Please wait for manual verification.');
+      return;
+    }
+
+    const upiId = 'paytm.s4ow732@pty';
+    const payeeName = 'Kausharbanu Yunus Malek';
+    final upiUri = Uri(
+      scheme: 'upi',
+      host: 'pay',
+      queryParameters: {
+        'pa': upiId,
+        'pn': payeeName,
+        'am': '290.00',
+        'cu': 'INR',
+        'tn': 'Wedding Video Share',
+      },
+    );
+    final utrController = TextEditingController();
+    final utr = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Pay ₹290 by UPI'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Scan this Paytm QR with any UPI app.'),
+              const SizedBox(height: 12),
+              QrImageView(data: upiUri.toString(), size: 220),
+              const SizedBox(height: 8),
+              const Text('Kausharbanu Yunus Malek', style: TextStyle(fontWeight: FontWeight.w700)),
+              SelectableText(upiId),
+              TextButton.icon(
+                onPressed: () => Clipboard.setData(const ClipboardData(text: upiId)),
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy UPI ID'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final launched = await launchUrl(upiUri, mode: LaunchMode.externalApplication);
+                  if (!launched && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('No UPI app could open the payment link. Scan the QR instead.')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.account_balance_wallet_outlined),
+                label: const Text('Open UPI app'),
+              ),
+              const SizedBox(height: 8),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('After paying, enter the UPI transaction ID / UTR:'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: utrController,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  hintText: 'Enter UTR / Transaction ID',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Payment will be checked manually. Sharing unlocks only after the payment is verified.',
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, utrController.text.trim()),
+            child: const Text('Submit UTR'),
+          ),
+        ],
+      ),
+    );
+    final reference = utr?.trim() ?? '';
+    utrController.dispose();
+    if (reference.isEmpty || !mounted) return;
+    if (!RegExp(r'^[A-Za-z0-9]{8,32}$').hasMatch(reference)) {
+      setState(() => _status = 'Please enter a valid UPI transaction ID / UTR (8–32 letters or numbers).');
+      return;
+    }
+
     setState(() { _busy = true; _status = null; });
     try {
-      final response = await supabase.functions.invoke('razorpay-payments', body: {'action': 'create_order'});
+      final response = await supabase.functions.invoke('manual-payments', body: {
+        'action': 'submit',
+        'utr': reference,
+      });
       final data = _map(response.data);
       if (response.status != 200 || data['ok'] != true) {
-        throw Exception(data['note']?.toString() ?? data['error']?.toString() ?? 'Payment setup is not ready.');
+        throw Exception(data['note']?.toString() ?? data['error']?.toString() ?? 'Could not submit payment details.');
       }
-      final keyId = data['keyId']?.toString();
-      final gatewayOrderId = data['razorpayOrderId']?.toString();
-      if (keyId == null || gatewayOrderId == null) throw Exception('Payment order details were incomplete.');
-      _razorpay.open({
-        'key': keyId,
-        'amount': 29000,
-        'currency': 'INR',
-        'name': 'Wedding Video Share',
-        'description': 'One wedding video upload and share',
-        'order_id': gatewayOrderId,
-        'prefill': {
-          'email': supabase.auth.currentUser?.email ?? '',
-          'contact': supabase.auth.currentUser?.phone ?? '',
-        },
-        'theme': {'color': '#6F2438'},
-      });
+      if (mounted) {
+        setState(() {
+          _manualPaymentStatus = 'pending';
+          _status = 'UPI payment details submitted. We will unlock sharing after manual payment verification.';
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() => _status = 'Payment: $e');
+      if (mounted) setState(() => _status = 'Payment submission: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  void _onPaymentSuccess(PaymentSuccessResponse response) {
-    if (!mounted) return;
-    setState(() => _status = 'Payment submitted. Waiting for secure server verification…');
-    unawaited(_pollPaymentVerification());
-  }
-
-  Future<void> _pollPaymentVerification() async {
-    for (var attempt = 0; attempt < 10; attempt++) {
-      await Future<void>.delayed(const Duration(seconds: 3));
-      if (!mounted) return;
-      await _loadOrder();
-      if (_order?['payment_status'] == 'paid') {
-        if (mounted) setState(() => _status = 'Payment verified. Creating your private share link…');
-        await _makeShareLink();
-        return;
-      }
-    }
-    if (mounted) setState(() => _status = 'Payment is still being confirmed. Tap Refresh in a moment.');
-  }
-
-  void _onPaymentError(PaymentFailureResponse response) {
-    if (mounted) setState(() => _status = 'Payment was not completed. Please try again.');
-  }
-
-  void _onExternalWallet(ExternalWalletResponse response) {
-    if (mounted) setState(() => _status = 'External wallet selected: ${response.walletName ?? 'wallet'}');
   }
 
   Future<void> _chooseAndUpload() async {
@@ -552,11 +618,18 @@ class _HomeScreenState extends State<HomeScreen> {
                       title: const Text('I agree: automatically delete my Google Drive video after the receiver’s full download is verified.'),
                       subtitle: const Text('Only the Google Drive copy is deleted. The original on your phone is not touched. If the download is interrupted or cannot be verified, the Drive copy is kept.'),
                     ),
-                    if (!paid)
+                    if (!paid && _manualPaymentStatus == 'pending')
+                      const ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.hourglass_top_rounded, color: Colors.orange),
+                        title: Text('UPI payment submitted'),
+                        subtitle: Text('Waiting for manual verification. Refresh this screen for status updates.'),
+                      )
+                    else if (!paid)
                       FilledButton.icon(
                         onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _startPayment,
-                        icon: const Icon(Icons.lock_open_rounded),
-                        label: const Text('Share Video – Pay ₹290'),
+                        icon: const Icon(Icons.qr_code_2_rounded),
+                        label: const Text('Pay ₹290 by QR / UPI'),
                         style: FilledButton.styleFrom(backgroundColor: burgundy),
                       )
                     else
