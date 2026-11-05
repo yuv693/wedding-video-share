@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
       });
       if (insertError) {
         console.error("MANUAL_PAYMENT_INSERT_FAILED", insertError.message);
-        return json({ error: "PAYMENT_SUBMISSION_FAILED", note: "This UTR may already have been used. Check it and try again." }, 409);
+        return json({ error: "PAYMENT_SUBMISSION_FAILED", note: "Could not submit your payment request. Please refresh and try again." }, 500);
       }
       await admin.from("audit_events").insert({
         actor_user_id: customerId,
