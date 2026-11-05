@@ -442,12 +442,84 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Account'),
         ],
       ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refresh,
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          const Positioned.fill(
+            child: Opacity(
+              opacity: 0.16,
+              child: Image(
+                image: AssetImage('assets/wedding_photo.jpg'),
+                fit: BoxFit.cover,
+                alignment: Alignment.center,
+              ),
+            ),
+          ),
+          const Positioned.fill(
+            child: ColoredBox(color: Color(0xDFFFF8EC)),
+          ),
+          SafeArea(
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+              Container(
+                margin: const EdgeInsets.only(bottom: 18),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFFCF7).withValues(alpha: 0.96),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: const Color(0xFFEADFD9)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('STEP ${_selectedTab + 1} OF 3',
+                      style: const TextStyle(color: burgundy, fontSize: 11, letterSpacing: 1.3, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 9),
+                    Row(children: [
+                      for (var step = 0; step < 3; step++) ...[
+                        Expanded(child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: step <= _selectedTab ? burgundy : const Color(0xFFE8DCD5),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        )),
+                        if (step != 2) const SizedBox(width: 6),
+                      ],
+                    ]),
+                    const SizedBox(height: 12),
+                    Text(
+                      _selectedTab == 0 ? 'Welcome to your wedding journey'
+                        : _selectedTab == 1 ? 'Connect Drive, upload and share'
+                        : 'Account and download completion',
+                      style: const TextStyle(color: burgundy, fontSize: 16, fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      if (_selectedTab > 0)
+                        OutlinedButton.icon(
+                          onPressed: _busy || _uploading ? null : () => setState(() => _selectedTab--),
+                          icon: const Icon(Icons.arrow_back_rounded, size: 17),
+                          label: const Text('Back'),
+                        ),
+                      const Spacer(),
+                      if (_selectedTab < 2)
+                        FilledButton.icon(
+                          onPressed: _busy || _uploading ? null : () => setState(() => _selectedTab++),
+                          style: FilledButton.styleFrom(backgroundColor: burgundy),
+                          icon: const Icon(Icons.arrow_forward_rounded, size: 17),
+                          label: const Text('Next step'),
+                        )
+                      else
+                        const Text('Journey end', style: TextStyle(color: burgundy, fontWeight: FontWeight.w700)),
+                    ]),
+                  ],
+                ),
+              ),
               if (_selectedTab == 0) ...[
               Container(
                 padding: const EdgeInsets.all(22),
@@ -575,14 +647,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     if (!paid)
                       FilledButton.icon(
-                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _startPayment,
+                        onPressed: _busy || _uploading ? null : _startPayment,
                         icon: const Icon(Icons.lock_open_rounded),
                         label: const Text('Share Video – Pay ₹290'),
                         style: FilledButton.styleFrom(backgroundColor: burgundy),
                       )
                     else
                       OutlinedButton.icon(
-                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _makeShareLink,
+                        onPressed: _busy || _uploading ? null : _makeShareLink,
                         icon: const Icon(Icons.link),
                         label: const Text('Create / refresh private link'),
                       ),
@@ -760,9 +832,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
               ],
-            ],
+                ],
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
