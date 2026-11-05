@@ -1,4 +1,6 @@
 title: Wedding Video Share
 description: Private wedding video sharing service
+baseurl: "/wedding-video-share"
+url: "https://yuv693.github.io"
 theme: minima
 markdown: kramdown
