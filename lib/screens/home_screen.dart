@@ -72,7 +72,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Start another wedding?'),
-        content: const Text('This creates a separate customer account for a new wedding. The new account needs its own verified recovery email and a new ₹290 payment. Your completed wedding remains saved in the previous account.'),
+        content: const Text('This creates a separate customer account for a new wedding. The new account needs its own ₹290 payment. Recovery email is optional. Your completed wedding remains saved in the previous account.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Create new account')),
