@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wedding Video Share — Owner Payments</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#fffaf6;color:#33252a;font:16px system-ui,sans-serif}.wrap{max-width:760px;margin:32px auto;padding:18px}.panel{background:white;border:1px solid #eadfd9;border-radius:18px;padding:22px;margin:16px 0;box-shadow:0 5px 20px #6f243810}h1{color:#6f2438;font-size:25px}input{width:100%;padding:13px;border:1px solid #cbb9b2;border-radius:10px;margin:8px 0}button{padding:11px 16px;border:0;border-radius:10px;background:#6f2438;color:white;font-weight:700;margin:5px;cursor:pointer}button.secondary{background:#eee4df;color:#6f2438}.muted{color:#76676c;font-size:13px}.row{border-top:1px solid #eee;padding:15px 0}.error{color:#b42318}.ok{color:#167344}
+</style></head><body><main class="wrap"><h1>Wedding Video Share</h1><p>Owner payment approval</p>
+<section id="login" class="panel"><h3>Owner sign in</h3><p class="muted">Sign in only with the authorized owner email.</p><input id="email" type="email" value="ym6250067@gmail.com" readonly><button id="send">Send login link</button><p id="loginmsg" class="muted"></p></section>
+<section id="app" class="panel" hidden><div style="display:flex;justify-content:space-between;align-items:center"><b>Pending QR payments</b><button class="secondary" id="refresh">Refresh</button></div><p class="muted">Check that ₹290 has actually arrived in Paytm before approving. “I have paid” is only a request, not proof.</p><div id="payments">Loading…</div><button class="secondary" id="logout">Sign out</button></section>
+<p id="notice" class="muted"></p></main>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+const supabase=createClient('https://mnaswhizatnwfwmjmtvm.supabase.co','sb_publishable_BwuKkASTfQuapaf1vnIAig_6sR9AGpW');
+const adminEmail='ym6250067@gmail.com';
+const $=id=>document.getElementById(id);
+async function call(action,extra={}){const {data,error}=await supabase.functions.invoke('manual-payment-admin',{body:{action,...extra}});if(error)throw error;if(data?.error)throw new Error(data.error);return data}
+async function render(){const {data:{session}}=await supabase.auth.getSession();const ok=session?.user?.email?.toLowerCase()===adminEmail;$('login').hidden=!!session;$('app').hidden=!ok;if(session&&!ok){$('notice').textContent='This account is not authorized for owner approvals.';return}if(ok)await load()}
+async function load(){ $('payments').textContent='Loading…';try{const data=await call('list');if(!data.payments.length){$('payments').textContent='No pending payment requests.';return}$('payments').innerHTML=data.payments.map(p=>'<div class="row"><b>₹'+(p.amount_paise/100).toFixed(2)+'</b><div class="muted">Customer: '+escapeHtml(p.customer_email)+'<br>Request: '+new Date(p.created_at).toLocaleString('en-IN')+'<br>Order: '+escapeHtml(p.order_id)+'</div><button data-approve="'+p.id+'">Approve after checking Paytm</button><button class="secondary" data-reject="'+p.id+'">Reject</button></div>').join('');}catch(e){$('payments').textContent='Could not load requests: '+e.message}}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+$('send').onclick=async()=>{try{const {error}=await supabase.auth.signInWithOtp({email:adminEmail,options:{emailRedirectTo:location.href}});if(error)throw error;$('loginmsg').textContent='Login link sent to '+adminEmail+'. Open it on this device.'}catch(e){$('loginmsg').textContent=e.message}};
+$('refresh').onclick=load;$('logout').onclick=async()=>{await supabase.auth.signOut();location.reload()};
+$('payments').onclick=async e=>{const a=e.target.closest('[data-approve]'),r=e.target.closest('[data-reject]');if(!a&&!r)return;const id=(a||r).dataset.approve||(r&&r.dataset.reject);if(a&&!confirm('Have you confirmed the ₹290 payment in Paytm? Approve this customer?'))return;if(r&&!confirm('Reject this payment request?'))return;try{await call(a?'approve':'reject',{payment_id:id});await load()}catch(err){alert(err.message)}};
+supabase.auth.onAuthStateChange(()=>render());await render();
+</script></body></html>
