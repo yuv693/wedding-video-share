@@ -123,11 +123,19 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final response = await supabase.functions.invoke('google-drive-storage', body: {'action': 'quota'});
       final data = _map(response.data);
-      if (response.status == 200 && data['ok'] == true && mounted) {
-        setState(() { _quota = data; _driveEmail = data['email']?.toString(); });
+      if (!mounted) return;
+      if (response.status == 200 && data['ok'] == true) {
+        setState(() {
+          _quota = data;
+          _driveEmail = data['email']?.toString();
+          if (_status?.startsWith('Google Drive') == true) _status = null;
+        });
+      } else {
+        final reason = data['error']?.toString() ?? 'DRIVE_CONNECTION_CHECK_FAILED';
+        setState(() => _status = 'Google Drive check failed: $reason. Please reconnect Google Drive.');
       }
-    } catch (_) {
-      // No linked Drive account yet, or the server has not been configured.
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Google Drive check failed. Please reconnect Google Drive.');
     }
   }
 
