@@ -43,6 +43,6 @@ Uploads and downloads depend on internet connectivity, Google Drive availability
 Keep your sign-in email secure. You are responsible for activity performed through your account. Do not attempt to access another customer's account, video or records.
 
 ## Changes and contact
-We may update these terms as the service changes. For support, payment or legal questions, contact: **[Add a monitored support email before public launch]**.
+We may update these terms as the service changes. For support, payment or legal questions, contact: **ym6250067@gmail.com**.
 
 These terms should be reviewed by a qualified professional for applicable consumer, privacy and payment laws before public launch.
