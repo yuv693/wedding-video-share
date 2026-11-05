@@ -48,9 +48,6 @@ Deno.serve(async (req) => {
       if (order.payment_status === "paid") return json({ ok: true, status: "verified", note: "Payment is already verified." });
       if (order.upload_locked) return json({ error: "ACCOUNT_ALREADY_USED" }, 409);
 
-      const utr = String(body.utr ?? "").trim().toUpperCase();
-      if (!/^[A-Z0-9]{8,32}$/.test(utr)) return json({ error: "INVALID_UTR", note: "Enter a valid UPI transaction ID / UTR." }, 400);
-
       const { data: video, error: videoError } = await admin.from("wedding_videos")
         .select("id,upload_status")
         .eq("order_id", order.id)
@@ -62,7 +59,7 @@ Deno.serve(async (req) => {
       }
 
       const { data: existing, error: existingError } = await admin.from("payment_transactions")
-        .select("id,status,gateway_payment_id")
+        .select("id,status")
         .eq("order_id", order.id)
         .eq("customer_id", customerId)
         .eq("gateway", "manual_upi")
@@ -73,20 +70,13 @@ Deno.serve(async (req) => {
       if (existingError) return json({ error: "PAYMENT_LOOKUP_FAILED" }, 500);
 
       if (existing) {
-        if (existing.gateway_payment_id === utr) return json({ ok: true, status: "pending", note: "This UTR is already submitted for verification." });
-        const { error } = await admin.from("payment_transactions")
-          .update({ gateway_payment_id: utr, gateway_payload: { method: "upi_qr", submitted_at: new Date().toISOString() } })
-          .eq("id", existing.id)
-          .eq("status", "pending");
-        if (error) return json({ error: "PAYMENT_SUBMISSION_FAILED", note: "Could not update the submitted UTR." }, 500);
-        return json({ ok: true, status: "pending", note: "Updated UTR submitted for manual verification." });
+        return json({ ok: true, status: "pending", note: "Your payment request is already waiting for manual verification." });
       }
 
       const { error: insertError } = await admin.from("payment_transactions").insert({
         order_id: order.id,
         customer_id: customerId,
         gateway: "manual_upi",
-        gateway_payment_id: utr,
         amount_paise: 29000,
         currency: "INR",
         status: "pending",
@@ -99,10 +89,10 @@ Deno.serve(async (req) => {
       await admin.from("audit_events").insert({
         actor_user_id: customerId,
         order_id: order.id,
-        event_type: "manual_upi_payment_submitted",
-        event_data: { amount_paise: 29000, gateway: "manual_upi" },
+        event_type: "manual_upi_payment_requested",
+        event_data: { amount_paise: 29000, gateway: "manual_upi", method: "qr_confirmation_only" },
       });
-      return json({ ok: true, status: "pending", note: "Payment details submitted. Sharing unlocks after manual verification." });
+      return json({ ok: true, status: "pending", note: "Payment request submitted. Sharing unlocks after manual verification." });
     } catch (error) {
       console.error("MANUAL_PAYMENT_ERROR", error instanceof Error ? error.message : "UNKNOWN");
       return json({ error: "MANUAL_PAYMENT_FAILED" }, 500);
