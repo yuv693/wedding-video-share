@@ -147,7 +147,7 @@ class _AccountAccessCardState extends State<AccountAccessCard> {
               const SizedBox(height: 8),
               Text(email, style: const TextStyle(fontWeight: FontWeight.w700, color: burgundy)),
             ] else ...[
-              const Text('Verify an email address before uploading or paying. You can use it to recover this same customer account if you change or reset your phone.'),
+              const Text('Recovery email is optional. Add and verify an email if you want to recover this same customer account after changing or resetting your phone. Uploading and payment do not require it.'),
               const SizedBox(height: 12),
               TextField(
                 controller: _email,
