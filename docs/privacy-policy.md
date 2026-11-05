@@ -49,6 +49,6 @@ You may choose not to connect Google Drive or not to use the service. You can re
 The service is intended for adults managing wedding-video sharing. It is not designed for children to create accounts or make payments.
 
 ## Changes and contact
-We may update this policy when the service changes. For privacy questions, contact: **[Add a monitored support email before public launch]**.
+We may update this policy when the service changes. For privacy questions, contact: **ym6250067@gmail.com**.
 
-The publisher must add real support contact details and obtain appropriate legal review before public launch.
+
