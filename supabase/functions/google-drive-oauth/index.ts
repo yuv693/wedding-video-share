@@ -82,7 +82,7 @@ async function startOAuth(req: Request, ctx: any) {
     client_id: cfg.clientId,
     redirect_uri: cfg.redirectUri,
     response_type: "code",
-    scope: "openid email https://www.googleapis.com/auth/drive.file",
+    scope: "openid email https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly",
     access_type: "offline",
     prompt: "select_account consent",
     include_granted_scopes: "true",
