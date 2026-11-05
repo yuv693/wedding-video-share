@@ -187,7 +187,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     if (_manualPaymentStatus == 'pending') {
-      setState(() => _status = 'Your UPI payment details are already submitted. Please wait for manual verification.');
+      setState(() => _status = 'Your payment request is already submitted. Please wait for manual verification.');
       return;
     }
 
@@ -204,8 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
         'tn': 'Wedding Video Share',
       },
     );
-    final utrController = TextEditingController();
-    final utr = await showDialog<String>(
+    final confirmedPaid = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Pay ₹290 by UPI'),
@@ -213,7 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Scan this Paytm QR with any UPI app.'),
+              const Text('Scan this QR with any UPI app and pay exactly ₹290.'),
               const SizedBox(height: 12),
               QrImageView(data: upiUri.toString(), size: 220),
               const SizedBox(height: 8),
@@ -237,22 +236,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 label: const Text('Open UPI app'),
               ),
               const SizedBox(height: 8),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text('After paying, enter the UPI transaction ID / UTR:'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: utrController,
-                textCapitalization: TextCapitalization.characters,
-                decoration: const InputDecoration(
-                  hintText: 'Enter UTR / Transaction ID',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
               const Text(
-                'Payment will be checked manually. Sharing unlocks only after the payment is verified.',
+                'After you pay, tap “I have paid”. Your request will remain pending until the owner checks the payment in Paytm.',
+                textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, color: Colors.black54),
               ),
             ],
@@ -260,42 +246,35 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, utrController.text.trim()),
-            child: const Text('Submit UTR'),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('I have paid'),
           ),
         ],
       ),
     );
-    final reference = utr?.trim() ?? '';
-    utrController.dispose();
-    if (reference.isEmpty || !mounted) return;
-    if (!RegExp(r'^[A-Za-z0-9]{8,32}$').hasMatch(reference)) {
-      setState(() => _status = 'Please enter a valid UPI transaction ID / UTR (8–32 letters or numbers).');
-      return;
-    }
+    if (confirmedPaid != true || !mounted) return;
 
     setState(() { _busy = true; _status = null; });
     try {
       final response = await supabase.functions.invoke('manual-payments', body: {
         'action': 'submit',
-        'utr': reference,
       });
       final data = _map(response.data);
       if (response.status != 200 || data['ok'] != true) {
-        throw Exception(data['note']?.toString() ?? data['error']?.toString() ?? 'Could not submit payment details.');
+        throw Exception(data['note']?.toString() ?? data['error']?.toString() ?? 'Could not submit payment request.');
       }
       if (mounted) {
         setState(() {
-          _manualPaymentStatus = 'pending';
-          _status = 'UPI payment details submitted. We will unlock sharing after manual payment verification.';
+          _manualPaymentStatus = data['status']?.toString() ?? 'pending';
+          _status = 'Payment request submitted. Sharing will unlock only after the owner verifies the ₹290 payment.';
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _status = 'Payment submission: $e');
+      if (mounted) setState(() => _status = 'Payment request: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
