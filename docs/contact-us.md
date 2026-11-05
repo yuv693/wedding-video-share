@@ -8,7 +8,7 @@ We provide support for account access, Google Drive connection, video uploads, p
 
 **Service:** Wedding Video Share  
 **Support email:** ym6250067@gmail.com  
-**Business / postal address:** [Add the publisher's valid business or correspondence address if required]
+**Business / correspondence address:** Mizan Enterprise, Near Hotel Indraprasth, Opposite Swaminarayan Mandir, Porbandar, Gujarat, India.
 
 When contacting support, include your order reference and a short description of the issue. For payment questions, include the Razorpay payment reference if available.
 
