@@ -50,6 +50,10 @@ int _acceptedOffset(String? range) {
   return int.parse(match.group(1)!) + 1;
 }
 
+class UploadPausedException implements Exception {
+  const UploadPausedException();
+}
+
 class VideoUploadResult {
   const VideoUploadResult({required this.fileName});
   final String fileName;
@@ -61,6 +65,7 @@ class VideoUploadService {
     required PlatformFile file,
     required void Function(double progress) onProgress,
     Stream<List<int>> Function(int offset)? streamFromOffset,
+    bool Function()? shouldPause,
   }) async {
     if (file.size <= 0 || file.size > maxVideoBytes) {
       throw Exception('Choose a video larger than 0 bytes and no bigger than 40 GB.');
@@ -112,6 +117,7 @@ class VideoUploadService {
         }
 
         while (offset < file.size) {
+          if (shouldPause?.call() == true) throw const UploadPausedException();
           if (currentOffset >= current.length) {
             current = Uint8List(0);
             currentOffset = 0;
