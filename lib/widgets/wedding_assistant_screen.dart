@@ -32,7 +32,7 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
   final List<_ChatLine> _messages = [
     const _ChatLine(
       false,
-      'Hello! I’m your Wedding Video Share assistant. Ask me about Google Drive, video upload, ₹290 payment, sharing links or guest downloads.',
+      'Hello! I’m Andee, your Wedding Video Share AI assistant. Ask me about Google Drive, video upload, ₹290 payment, sharing links or guest downloads.',
     ),
   ];
 
@@ -121,9 +121,9 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Wedding Assistant', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: burgundy)),
+                    Text('Andee AI Assistant', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: burgundy)),
                     SizedBox(height: 3),
-                    Text('Guided help for your wedding sharing journey', style: TextStyle(fontSize: 12, color: Color(0xFF66575B))),
+                    Text('Your smart wedding-sharing helper', style: TextStyle(fontSize: 12, color: Color(0xFF66575B))),
                   ],
                 ),
               ),
