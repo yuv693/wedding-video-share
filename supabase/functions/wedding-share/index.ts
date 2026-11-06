@@ -108,9 +108,10 @@ async function workerInternal(req: Request, body: Record<string, unknown>) {
   const {data:o}=await admin.from("wedding_orders").select("id,customer_id,payment_status").eq("id",s.order_id).maybeSingle();
   if(!o||o.payment_status!=="paid")return json({error:"VIDEO_UNAVAILABLE"},404);
   const videoId=String(body.videoId??"");
-  if(!videoId)return json({error:"VIDEO_ID_REQUIRED"},400);
-  const {data:v}=await admin.from("wedding_videos").select("id,google_drive_file_id,original_filename,mime_type,file_size_bytes,upload_status,auto_delete_consent_at").eq("order_id",o.id).eq("id",videoId).maybeSingle();
-  if(!v||v.upload_status!=="uploaded"||!v.google_drive_file_id)return json({error:"VIDEO_UNAVAILABLE"},404);
+  let videoQuery=admin.from("wedding_videos").select("id,google_drive_file_id,original_filename,mime_type,file_size_bytes,upload_status,auto_delete_consent_at").eq("order_id",o.id).eq("upload_status","uploaded").is("deleted_at",null);
+  if(videoId) videoQuery=videoQuery.eq("id",videoId);
+  const {data:v}=await videoQuery.order("created_at",{ascending:true}).limit(1).maybeSingle();
+  if(!v||!v.google_drive_file_id)return json({error:"VIDEO_UNAVAILABLE"},404);
   const {token}=await accessToken(admin,o.customer_id);
   const check=await driveFetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(v.google_drive_file_id)+"?fields=id,size,trashed",token);
   const meta=await check.json();
