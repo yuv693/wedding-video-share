@@ -60,6 +60,7 @@ class VideoUploadService {
     required String orderId,
     required PlatformFile file,
     required void Function(double progress) onProgress,
+    Stream<List<int>> Function(int offset)? streamFromOffset,
   }) async {
     if (file.size <= 0 || file.size > maxVideoBytes) {
       throw Exception('Choose a video larger than 0 bytes and no bigger than 40 GB.');
@@ -77,7 +78,7 @@ class VideoUploadService {
     onProgress(offset / file.size);
 
     if (fileId.isEmpty) {
-      final source = file.readStream;
+      final source = streamFromOffset != null ? streamFromOffset(offset) : file.readStream;
       if (source == null) {
         throw Exception('Android did not provide a video stream. Please select the video again.');
       }
@@ -99,7 +100,7 @@ class VideoUploadService {
       }
 
       try {
-        var skipped = 0;
+        var skipped = streamFromOffset == null ? 0 : offset;
         while (skipped < offset) {
           if (!await iterator.moveNext()) {
             throw Exception('The selected file is shorter than the saved upload checkpoint.');
