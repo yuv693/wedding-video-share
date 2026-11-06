@@ -463,6 +463,47 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _deleteSingleDriveVideo(Map<String, dynamic> video) async {
+    final name = video['original_filename']?.toString() ?? 'this video';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete this uploaded video?'),
+        content: Text('Delete "$name" from your Google Drive? This cannot be undone. The original video on your phone will remain safe. You can then upload the correct video.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6F2438)),
+            child: const Text('Delete this video'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() { _busy = true; _status = null; });
+    try {
+      final response = await supabase.functions.invoke('google-drive-storage', body: {
+        'action': 'delete_video',
+        'videoId': video['id'],
+      });
+      final data = _map(response.data);
+      if (response.status != 200 || data['ok'] != true || data['deleted'] != true) {
+        throw Exception(data['error']?.toString() ?? 'Could not delete this Google Drive video.');
+      }
+      if (mounted) setState(() {
+        _shareUrl = null;
+        _sharePin = null;
+        _status = '"$name" deleted from Google Drive. Your phone original is safe. You can upload the correct video now.';
+      });
+      await _loadOrder();
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Delete video: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _deleteDriveCopy() async {
     final targets = _videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).toList();
     if (targets.isEmpty) return;
@@ -638,7 +679,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Text('Choose up to 10 videos together. They upload one by one to your own Google Drive; phone originals are never deleted. If the app closes or the internet stops, reopen this app and tap Resume Upload.'),
                   const SizedBox(height: 12),
                   if (videoReady)
-                    ..._videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).map((v) => Text('Uploaded: ${v['original_filename']} (${_bytes(v['file_size_bytes'])})')).toList(),
+                    ..._videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).map((v) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(children: [
+                        const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text('${v['original_filename']} (${_bytes(v['file_size_bytes'])})')),
+                        IconButton(
+                          tooltip: 'Delete this uploaded video',
+                          onPressed: _busy || _uploading ? null : () => _deleteSingleDriveVideo(v),
+                          icon: const Icon(Icons.delete_outline, color: Color(0xFF6F2438)),
+                        ),
+                      ]),
+                    )).toList(),
                   if (videoDeleted)
                     const Text('Some or all Google Drive copies were deleted. The phone originals remain untouched.'),
                   if (_pendingUploads.any((p) => p.orderId == (_order?['id']?.toString() ?? '')))
