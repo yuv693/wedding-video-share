@@ -188,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _startPayment() async {
-    if (_video?['upload_status'] != 'uploaded' || _order == null) {
+    if (!_videos.any((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null) || _order == null) {
       setState(() => _status = 'Upload your wedding video first. Payment is needed when you share it.');
       return;
     }
@@ -407,24 +407,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _deleteDriveCopy() async {
-    if (_video == null || _video!['id'] == null) return;
+    final targets = _videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).toList();
+    if (targets.isEmpty) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete your Google Drive copy?'),
-        content: const Text(
-          'This permanently deletes the Wedding Video Share copy from your own Google Drive. '
-          'The original video on your phone will not be touched. Your one-video plan will remain used.',
+        title: const Text('Delete your Google Drive copies?'),
+        content: Text(
+          'This permanently deletes ${targets.length} Wedding Video Share copy/copies from your Google Drive. '
+          'The original videos on your phone will not be touched.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Keep video'),
-          ),
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Keep videos')),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
             style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6F2438)),
-            child: const Text('Delete Drive copy'),
+            child: const Text('Delete Drive copies'),
           ),
         ],
       ),
@@ -433,21 +431,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
     setState(() { _busy = true; _status = null; });
     try {
-      final response = await supabase.functions.invoke('google-drive-storage', body: {
-        'action': 'delete_video',
-        'videoId': _video!['id'],
-      });
-      final data = _map(response.data);
-      if (response.status != 200 || data['ok'] != true || data['deleted'] != true) {
-        throw Exception(data['error']?.toString() ?? 'The Google Drive copy could not be deleted.');
+      for (final video in targets) {
+        final response = await supabase.functions.invoke('google-drive-storage', body: {
+          'action': 'delete_video',
+          'videoId': video['id'],
+        });
+        final data = _map(response.data);
+        if (response.status != 200 || data['ok'] != true || data['deleted'] != true) {
+          throw Exception(data['error']?.toString() ?? 'A Google Drive copy could not be deleted.');
+        }
       }
-      if (mounted) {
-        setState(() => _status =
-            'Your Google Drive copy was deleted. The original video on your phone is untouched. This account’s one-video slot remains used.');
-      }
+      if (mounted) setState(() => _status =
+          'All selected Google Drive copies were deleted. Your phone originals remain untouched.');
       await _loadOrder();
     } catch (e) {
       if (mounted) setState(() => _status = 'Delete: $e');
+      await _loadOrder();
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -585,7 +584,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (videoReady)
                     ..._videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).map((v) => Text('Uploaded: ${v['original_filename']} (${_bytes(v['file_size_bytes'])})')).toList(),
                   else if (videoDeleted)
-                    const Text('Your Google Drive copy was deleted by you. The phone original remains untouched; this one-video plan cannot be reused.')
+                    const Text('Your Google Drive copies were deleted. The phone originals remain untouched.')
                   else if (videoSlotUsed)
                     const Text('This account has already used its video slots. Create a new account for another wedding.')
                   else
