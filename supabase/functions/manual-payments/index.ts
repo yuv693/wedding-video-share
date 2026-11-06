@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
 
   const handler = withSupabase({ auth: "user" }, async (_request, ctx) => {
     try {
-      const customerId = ctx.userClaims?.sub;
+      const customerId = ctx.userClaims?.id;
       if (typeof customerId !== "string" || !customerId) return json({ error: "AUTH_REQUIRED" }, 401);
       const admin = adminClient();
       const { data: order, error: orderError } = await admin.from("wedding_orders")
