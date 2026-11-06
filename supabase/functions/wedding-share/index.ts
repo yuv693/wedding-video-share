@@ -82,7 +82,7 @@ async function workerInternal(req: Request, body: Record<string, unknown>) {
   const {data:s}=await admin.from("share_links").select("id,order_id,is_active,expires_at,revoked_at").eq("token_hash",await hash(t)).maybeSingle();
   if(!s||!s.is_active||s.revoked_at||(s.expires_at&&new Date(s.expires_at).getTime()<=Date.now()))return json({error:"SHARE_INVALID"},404);
   const pin=String(body.pin??"");
-  if(!/^\\d{6}$/.test(pin))return json({error:"PIN_REQUIRED"},400);
+  if(!/^\d{6}$/.test(pin))return json({error:"PIN_REQUIRED"},400);
   const candidateHash=await hash(t+":"+pin);
   const {data:pinOk,error:pinError}=await admin.rpc("verify_share_download_pin",{p_token_hash:await hash(t),p_candidate_hash:candidateHash});
   if(pinError||pinOk!==true)return json({error:"PIN_INVALID_OR_LOCKED"},403);
