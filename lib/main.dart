@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'widgets/andee_overlay.dart';
 
 import 'screens/welcome_screen.dart';
