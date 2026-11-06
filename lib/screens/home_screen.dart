@@ -333,7 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
           orderId: _order!['id'].toString(),
           file: file,
           onProgress: (value) {
-            if (mounted) setState(() => _uploadProgress = (completed + value) / result.files.length);
+            if (mounted) setState(() => _uploadProgress = (completed + value) / newFiles.length);
           },
         );
         completed++;
