@@ -3,21 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'widgets/andee_overlay.dart';
 
 import 'screens/welcome_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/account_recovery_screen.dart';
 import 'services/backend.dart';
-
-@pragma('vm:entry-point')
-void overlayMain() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: AndeeFloatingBubble(),
-  ));
-}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
