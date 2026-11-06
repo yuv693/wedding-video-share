@@ -115,9 +115,11 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
     }
     await _tts.stop();
     await _speech.listen(
-      localeId: _speechLocale,
-      listenFor: const Duration(seconds: 30),
-      pauseFor: const Duration(seconds: 4),
+      options: SpeechListenOptions(
+        localeId: _speechLocale,
+        listenFor: const Duration(seconds: 30),
+        pauseFor: const Duration(seconds: 4),
+      ),
       onResult: (result) {
         if (!mounted) return;
         setState(() => _controller.text = result.recognizedWords);
