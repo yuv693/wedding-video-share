@@ -29,6 +29,26 @@ Deno.serve(async (req) => {
         .eq("customer_id", customerId)
         .maybeSingle();
       if (orderError) return json({ error: "ORDER_LOOKUP_FAILED" }, 500);
+
+      // Paytm QR uses manual verification; prepare the customer order without contacting Razorpay.
+      if (body.action === "prepare_upload") {
+        if (order?.upload_locked) return json({ error: "ACCOUNT_ALREADY_USED", note: "This account has completed its one-video cycle. Create a new account for another wedding." }, 409);
+        if (!order) {
+          const { data: created, error: createError } = await admin.from("wedding_orders").insert({
+            customer_id: customerId,
+            amount_paise: 29000,
+            currency: "INR",
+            payment_status: "pending",
+            workflow_status: "payment_pending",
+          }).select("id,payment_status,upload_locked").single();
+          if (createError || !created) {
+            console.error("MANUAL_ORDER_CREATE_FAILED", createError?.message ?? "NO_ROW_RETURNED");
+            return json({ error: "ORDER_CREATE_FAILED" }, 500);
+          }
+          order = created;
+        }
+        return json({ ok: true, orderId: order.id, paymentStatus: order.payment_status });
+      }
       if (!order) return json({ error: "ORDER_NOT_FOUND" }, 404);
 
       if (body.action === "status") {
