@@ -172,10 +172,7 @@ Deno.serve((req) => {
         const { data: order, error: orderError } = await admin.from("wedding_orders").select("id,customer_id,payment_status,upload_locked").eq("id", orderId).eq("customer_id", customerId).maybeSingle();
         if (orderError || !order) throw new Error("ORDER_NOT_FOUND");
         if (order.upload_locked) throw new Error("UPLOAD_LOCKED");
-        // A paid order may consume exactly one video slot. A soft-deleted video still counts as used.
-        const { data: existingVideo, error: existingVideoError } = await admin.from("wedding_videos").select("id").eq("order_id", orderId).maybeSingle();
-        if (existingVideoError) throw new Error("VIDEO_LOOKUP_FAILED");
-        if (existingVideo) throw new Error("VIDEO_ALREADY_EXISTS");
+        // Multiple videos are allowed in one wedding order; uploads are serialized by the app.
         const quotaRes = await driveRequest("https://www.googleapis.com/drive/v3/about?fields=storageQuota(limit,usage)", accessToken);
         const quota = await quotaRes.json();
         if (!quotaRes.ok || !quota.storageQuota) { googleApiDiagnostic("start_upload_quota", quotaRes.status, quota); throw new Error("DRIVE_QUOTA_UNAVAILABLE"); }
