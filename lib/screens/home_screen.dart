@@ -585,7 +585,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (videoReady)
                     ..._videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).map((v) => Text('Uploaded: ${v['original_filename']} (${_bytes(v['file_size_bytes'])})')).toList(),
                   if (videoDeleted)
-                    const Text('Some or all Google Drive copies were deleted. The phone originals remain untouched.')
+                    const Text('Some or all Google Drive copies were deleted. The phone originals remain untouched.'),
                   if (!locked && _videos.length < 10)
                     FilledButton.icon(
                       onPressed: _busy || _uploading || _driveEmail == null ? null : _chooseAndUpload,
