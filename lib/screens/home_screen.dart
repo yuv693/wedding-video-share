@@ -288,7 +288,7 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() { _busy = true; _status = null; _uploadProgress = 0; });
     try {
       if (_order == null) {
-        final prepared = await supabase.functions.invoke('razorpay-payments', body: {'action': 'prepare_upload'});
+        final prepared = await supabase.functions.invoke('manual-payments', body: {'action': 'prepare_upload'});
         final preparedData = _map(prepared.data);
         if (prepared.status != 200 || preparedData['ok'] != true) {
           throw Exception(preparedData['note']?.toString() ?? preparedData['error']?.toString() ?? 'Could not prepare your upload.');
