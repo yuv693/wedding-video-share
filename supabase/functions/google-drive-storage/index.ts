@@ -173,7 +173,7 @@ Deno.serve((req) => {
         if (orderError || !order) throw new Error("ORDER_NOT_FOUND");
         if (order.upload_locked) throw new Error("UPLOAD_LOCKED");
         const { count: videoCount, error: countError } = await admin.from("wedding_videos")
-          .select("id", { count: "exact", head: true }).eq("order_id", orderId);
+          .select("id", { count: "exact", head: true }).eq("order_id", orderId).neq("upload_status", "deleted");
         if (countError) throw new Error("VIDEO_LOOKUP_FAILED");
         if ((videoCount ?? 0) >= 10) throw new Error("VIDEO_LIMIT_REACHED");
         // Multiple videos are allowed in one wedding order; uploads are serialized by the app.
