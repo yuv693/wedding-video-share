@@ -68,14 +68,15 @@ Deno.serve(async (req) => {
       if (order.payment_status === "paid") return json({ ok: true, status: "verified", note: "Payment is already verified." });
       if (order.upload_locked) return json({ error: "ACCOUNT_ALREADY_USED" }, 409);
 
-      const { data: video, error: videoError } = await admin.from("wedding_videos")
+      const { data: videos, error: videoError } = await admin.from("wedding_videos")
         .select("id,upload_status")
         .eq("order_id", order.id)
         .eq("customer_id", customerId)
-        .maybeSingle();
+        .eq("upload_status", "uploaded")
+        .is("deleted_at", null);
       if (videoError) return json({ error: "VIDEO_LOOKUP_FAILED" }, 500);
-      if (!video || video.upload_status !== "uploaded") {
-        return json({ error: "VIDEO_REQUIRED", note: "Upload your wedding video before submitting payment." }, 409);
+      if (!videos || videos.length === 0) {
+        return json({ error: "VIDEO_REQUIRED", note: "Upload at least one wedding video before submitting payment." }, 409);
       }
 
       const { data: existing, error: existingError } = await admin.from("payment_transactions")
