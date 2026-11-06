@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_tts/flutter_tts.dart';
 
 import '../services/backend.dart';
 
@@ -31,6 +33,11 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
   final _scrollController = ScrollController();
   bool _sending = false;
   bool _overlayBusy = false;
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  final FlutterTts _tts = FlutterTts();
+  bool _speechReady = false;
+  bool _listening = false;
+  String _speechLocale = 'hi_IN';
 
   Future<void> _enableFloatingAndee() async {
     if (_overlayBusy) return;
@@ -74,7 +81,67 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _initVoice();
+  }
+
+  Future<void> _initVoice() async {
+    try {
+      _speechReady = await _speech.initialize(
+        onStatus: (status) { if (mounted) setState(() => _listening = status == 'listening'); },
+        onError: (error) { if (mounted) setState(() => _listening = false); },
+      );
+      await _tts.setSpeechRate(0.48);
+      await _tts.setVolume(1.0);
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (mounted) setState(() => _speechReady = false);
+    }
+  }
+
+  Future<void> _toggleListening() async {
+    if (!_speechReady) {
+      await _initVoice();
+      if (!_speechReady && mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Speech recognition unavailable. Check microphone permission and Google speech services.')),
+      );
+      return;
+    }
+    if (_speech.isListening) {
+      await _speech.stop();
+      if (mounted) setState(() => _listening = false);
+      return;
+    }
+    await _tts.stop();
+    await _speech.listen(
+      localeId: _speechLocale,
+      listenFor: const Duration(seconds: 30),
+      pauseFor: const Duration(seconds: 4),
+      onResult: (result) {
+        if (!mounted) return;
+        setState(() => _controller.text = result.recognizedWords);
+        _controller.selection = TextSelection.fromPosition(TextPosition(offset: _controller.text.length));
+        if (result.finalResult && result.recognizedWords.trim().isNotEmpty) _ask(result.recognizedWords);
+      },
+    );
+    if (mounted) setState(() => _listening = true);
+  }
+
+  Future<void> _speakAnswer(String text) async {
+    try {
+      await _tts.stop();
+      final hasGujarati = RegExp(r'[\\u0A80-\\u0AFF]').hasMatch(text);
+      final hasHindi = RegExp(r'[\\u0900-\\u097F]').hasMatch(text);
+      await _tts.setLanguage(hasGujarati ? 'gu-IN' : (hasHindi ? 'hi-IN' : 'en-IN'));
+      await _tts.speak(text);
+    } catch (_) {}
+  }
+
+  @override
   void dispose() {
+    _speech.cancel();
+    _tts.stop();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -111,7 +178,9 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
         throw Exception(data['error']?.toString() ?? 'AI assistant is unavailable.');
       }
       if (!mounted) return;
-      setState(() => _messages.add(_ChatLine(false, data['answer'] as String)));
+      final answer = data['answer'] as String;
+      setState(() => _messages.add(_ChatLine(false, answer)));
+      await _speakAnswer(answer);
     } catch (_) {
       if (!mounted) return;
       setState(() => _messages.add(const _ChatLine(
@@ -236,12 +305,28 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
               ),
             ),
             const SizedBox(width: 8),
+            IconButton(
+              tooltip: _listening ? 'Stop listening' : 'Ask Andee by voice',
+              onPressed: _sending ? null : _toggleListening,
+              icon: Icon(_listening ? Icons.mic : Icons.mic_none_rounded, color: _listening ? Colors.red : burgundy, size: 28),
+            ),
             IconButton.filled(
               onPressed: _sending ? null : () { final value = _controller.text.trim(); if (value.isNotEmpty) _ask(value); },
               style: IconButton.styleFrom(backgroundColor: burgundy, foregroundColor: Colors.white),
               icon: const Icon(Icons.send_rounded),
             ),
           ],
+        ),
+        const SizedBox(height: 4),
+        DropdownButton<String>(
+          value: _speechLocale,
+          isExpanded: true,
+          items: const [
+            DropdownMenuItem(value: 'hi_IN', child: Text('Voice language: Hindi')),
+            DropdownMenuItem(value: 'gu_IN', child: Text('Voice language: Gujarati')),
+            DropdownMenuItem(value: 'en_IN', child: Text('Voice language: English')),
+          ],
+          onChanged: (value) { if (value != null) setState(() => _speechLocale = value); },
         ),
         const SizedBox(height: 8),
         const Text(
