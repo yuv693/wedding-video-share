@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -10,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/backend.dart';
 import '../widgets/account_access_card.dart';
 import '../services/video_upload_service.dart';
+import '../services/persistent_video_picker.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -29,6 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, dynamic>? _order, _quota;
   List<Map<String, dynamic>> _videos = [];
   List<Map<String, dynamic>> _notifications = [];
+  List<PersistentVideo> _pendingUploads = [];
 
   @override
   void initState() {
@@ -36,6 +37,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _linkSubscription = _appLinks.uriLinkStream.listen(_handleIncomingLink);
     unawaited(_loadInitialLink());
     _refresh();
+    _loadPendingUploads();
   }
 
   @override
@@ -285,6 +287,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _loadPendingUploads() async {
+    try {
+      final items = await PersistentVideo.pending();
+      if (mounted) setState(() => _pendingUploads = items);
+    } catch (_) {
+      // Persistent picker is available on supported Android builds.
+    }
+  }
+
   Future<void> _chooseAndUpload() async {
     if (_order?['upload_locked'] == true || _videos.length >= 10) {
       setState(() => _status = 'This wedding has reached its 10-video limit. Create a new account for another wedding.');
@@ -301,60 +312,92 @@ class _HomeScreenState extends State<HomeScreen> {
         await _loadOrder();
       }
       if (_order == null) throw Exception('Your wedding upload could not be prepared. Please refresh and try again.');
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.video,
-        allowMultiple: true,
-        withReadStream: true,
-        withData: false,
-      );
-      if (result == null || result.files.isEmpty) return;
-      final newFiles = result.files.where((file) => !_videos.any((v) =>
-        v['original_filename'] == file.name &&
-        (v['file_size_bytes'] as num?)?.toInt() == file.size &&
-        v['upload_status'] == 'uploaded')).toList();
-      if (newFiles.isEmpty) {
-        setState(() => _status = 'These videos are already uploaded.');
-        return;
-      }
-      if (newFiles.length > 10 || _videos.length + newFiles.length > 10) {
+      final picked = await PersistentVideo.pick(_order!['id'].toString());
+      if (picked.isEmpty) return;
+      if (_videos.length + picked.where((p) => !_videos.any((v) =>
+          v['original_filename'] == p.name &&
+          (v['file_size_bytes'] as num?)?.toInt() == p.size &&
+          v['upload_status'] == 'uploaded')).length > 10) {
         throw Exception('You can upload up to 10 videos in one wedding. Select fewer new videos.');
       }
-      if (!mounted) return;
-      setState(() { _uploading = true; _busy = false; });
-      var completed = 0;
-      for (final file in newFiles) {
-        if (!mounted) return;
-        setState(() {
-          _status = 'Uploading video ${completed + 1} of ${newFiles.length}: ${file.name}';
-          _uploadProgress = completed / newFiles.length;
-        });
-        await _uploadService.upload(
-          orderId: _order!['id'].toString(),
-          file: file,
-          onProgress: (value) {
-            if (mounted) setState(() => _uploadProgress = (completed + value) / newFiles.length);
-          },
-        );
-        completed++;
-        await _loadOrder();
-      }
+      await _loadPendingUploads();
+      await _uploadPendingVideos(picked);
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Upload: $e');
+    } finally {
+      if (mounted) setState(() { _busy = false; _uploading = false; });
+    }
+  }
+
+  Future<void> _resumePendingUploads() async {
+    if (_order == null) {
+      await _loadOrder();
+    }
+    final orderId = _order?['id']?.toString();
+    if (orderId == null) {
+      setState(() => _status = 'Please refresh your wedding account before resuming.');
+      return;
+    }
+    final items = _pendingUploads.where((item) => item.orderId == orderId).toList();
+    if (items.isEmpty) {
+      setState(() => _status = 'No saved uploads for this wedding account.');
+      return;
+    }
+    setState(() { _busy = true; _status = null; });
+    try {
+      await _uploadPendingVideos(items);
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Resume upload: $e');
+    } finally {
+      if (mounted) setState(() { _busy = false; _uploading = false; });
+    }
+  }
+
+  Future<void> _uploadPendingVideos(List<PersistentVideo> items) async {
+    if (_order == null) throw Exception('Wedding account is not ready.');
+    final pending = items.where((item) => !_videos.any((v) =>
+      v['original_filename'] == item.name &&
+      (v['file_size_bytes'] as num?)?.toInt() == item.size &&
+      v['upload_status'] == 'uploaded')).toList();
+    if (pending.isEmpty) {
+      setState(() => _status = 'These videos are already uploaded.');
+      return;
+    }
+    setState(() { _uploading = true; _busy = false; });
+    var completed = 0;
+    for (final item in pending) {
       if (!mounted) return;
       setState(() {
-        _shareUrl = null;
-        _sharePin = null;
-        _status = '${completed} video(s) uploaded successfully. You can share all videos using one private link.';
-        _uploading = false;
-        _uploadProgress = 1;
+        _status = 'Uploading video ${completed + 1} of ${pending.length}: ${item.name}';
+        _uploadProgress = completed / pending.length;
       });
-      await _loadOrder();
-    } catch (e) {
+      await _uploadService.upload(
+        orderId: _order!['id'].toString(),
+        file: item.toPlatformFile(),
+        streamFromOffset: item.streamFrom,
+        onProgress: (value) {
+          if (mounted) setState(() => _uploadProgress = (completed + value) / pending.length);
+        },
+      );
+      await PersistentVideo.remove(item.uri);
+      completed++;
       if (mounted) {
-        setState(() { _status = 'Upload: $e'; _uploading = false; });
-        await _loadOrder();
+        setState(() {
+          _pendingUploads.removeWhere((p) => p.uri == item.uri);
+          _uploadProgress = completed / pending.length;
+        });
       }
-    } finally {
-      if (mounted) setState(() => _busy = false);
+      await _loadOrder();
     }
+    if (!mounted) return;
+    setState(() {
+      _shareUrl = null;
+      _sharePin = null;
+      _status = '${completed} video(s) uploaded successfully. You can share all videos using one private link.';
+      _uploading = false;
+      _uploadProgress = 1;
+    });
+    await _loadOrder();
   }
 
   Future<void> _updateAutoDeleteConsent(bool consent) async {
@@ -579,12 +622,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('Upload without the guesswork.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  const Text('Choose up to 10 videos together. They upload one by one to your own Google Drive; phone originals are never deleted. If the connection stops, select the same videos again to resume.'),
+                  const Text('Choose up to 10 videos together. They upload one by one to your own Google Drive; phone originals are never deleted. If the app closes or the internet stops, reopen this app and tap Resume Upload.'),
                   const SizedBox(height: 12),
                   if (videoReady)
                     ..._videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).map((v) => Text('Uploaded: ${v['original_filename']} (${_bytes(v['file_size_bytes'])})')).toList(),
                   if (videoDeleted)
                     const Text('Some or all Google Drive copies were deleted. The phone originals remain untouched.'),
+                  if (_pendingUploads.any((p) => p.orderId == (_order?['id']?.toString() ?? '')))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _busy || _uploading || _driveEmail == null ? null : _resumePendingUploads,
+                          icon: const Icon(Icons.play_circle_outline),
+                          label: Text('Resume Upload (${_pendingUploads.where((p) => p.orderId == (_order?['id']?.toString() ?? '')).length} saved)'),
+                        ),
+                      ),
+                    ),
                   if (!locked && _videos.length < 10)
                     FilledButton.icon(
                       onPressed: _busy || _uploading || _driveEmail == null ? null : _chooseAndUpload,
