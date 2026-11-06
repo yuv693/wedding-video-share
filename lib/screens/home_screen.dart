@@ -309,22 +309,24 @@ class _HomeScreenState extends State<HomeScreen> {
         withData: false,
       );
       if (result == null || result.files.isEmpty) return;
-      if (result.files.length > 10 || _videos.length + result.files.length > 10) {
-        throw Exception('You can upload up to 10 videos in one wedding. Select fewer videos.');
+      final newFiles = result.files.where((file) => !_videos.any((v) =>
+        v['original_filename'] == file.name &&
+        (v['file_size_bytes'] as num?)?.toInt() == file.size &&
+        v['upload_status'] == 'uploaded')).toList();
+      if (newFiles.isEmpty) {
+        setState(() => _status = 'These videos are already uploaded.');
+        return;
+      }
+      if (newFiles.length > 10 || _videos.length + newFiles.length > 10) {
+        throw Exception('You can upload up to 10 videos in one wedding. Select fewer new videos.');
       }
       if (!mounted) return;
       setState(() { _uploading = true; _busy = false; });
       var completed = 0;
-      var skipped = 0;
-      for (final file in result.files) {
-        final alreadyUploaded = _videos.any((v) =>
-          v['original_filename'] == file.name &&
-          (v['file_size_bytes'] as num?)?.toInt() == file.size &&
-          v['upload_status'] == 'uploaded');
-        if (alreadyUploaded) { skipped++; completed++; continue; }
+      for (final file in newFiles) {
         if (!mounted) return;
         setState(() {
-          _status = 'Uploading video ${completed + 1} of ${result.files.length}: ${file.name}';
+          _status = 'Uploading video ${completed + 1} of ${newFiles.length}: ${file.name}';
           _uploadProgress = completed / result.files.length;
         });
         await _uploadService.upload(
@@ -341,7 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _shareUrl = null;
         _sharePin = null;
-        _status = '${completed - skipped} video(s) uploaded successfully. You can share all videos using one private link.';
+        _status = '${completed} video(s) uploaded successfully. You can share all videos using one private link.';
         _uploading = false;
         _uploadProgress = 1;
       });
@@ -485,7 +487,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final locked = _order?['upload_locked'] == true;
     final videoReady = _videos.any((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null);
     final videoDeleted = _videos.isNotEmpty && _videos.every((v) => v['upload_status'] == 'deleted');
-    final videoSlotUsed = _videos.isNotEmpty;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Wedding Video Share', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -583,17 +584,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 12),
                   if (videoReady)
                     ..._videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).map((v) => Text('Uploaded: ${v['original_filename']} (${_bytes(v['file_size_bytes'])})')).toList(),
-                  else if (videoDeleted)
-                    const Text('Your Google Drive copies were deleted. The phone originals remain untouched.')
-                  else if (videoSlotUsed)
-                    const Text('This account has already used its video slots. Create a new account for another wedding.')
-                  else
+                  if (videoDeleted)
+                    const Text('Some or all Google Drive copies were deleted. The phone originals remain untouched.')
+                  if (!locked && _videos.length < 10)
                     FilledButton.icon(
-                      onPressed: _busy || _uploading || locked || _driveEmail == null ? null : _chooseAndUpload,
+                      onPressed: _busy || _uploading || _driveEmail == null ? null : _chooseAndUpload,
                       style: FilledButton.styleFrom(backgroundColor: burgundy),
                       icon: const Icon(Icons.video_file),
-                      label: const Text('Choose up to 10 wedding videos'),
-                    ),
+                      label: Text(_videos.isEmpty ? 'Choose up to 10 wedding videos' : 'Add more videos (${10 - _videos.length} slots left)'),
+                    )
+                  else
+                    const Text('This wedding has reached its 10-video limit or is locked.'),
                   if (_uploading) ...[
                     const SizedBox(height: 14),
                     const Text('Uploading to your Google Drive…', style: TextStyle(fontWeight: FontWeight.w700)),
