@@ -1,10 +1,16 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wedding Video Share — Owner Payments</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wedding Video Share — Owner Admin</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#fffaf6;color:#33252a;font:16px system-ui,sans-serif}.wrap{max-width:760px;margin:32px auto;padding:18px}.panel{background:white;border:1px solid #eadfd9;border-radius:18px;padding:22px;margin:16px 0;box-shadow:0 5px 20px #6f243810}h1{color:#6f2438;font-size:25px}input{width:100%;padding:13px;border:1px solid #cbb9b2;border-radius:10px;margin:8px 0}button{padding:11px 16px;border:0;border-radius:10px;background:#6f2438;color:white;font-weight:700;margin:5px;cursor:pointer}button.secondary{background:#eee4df;color:#6f2438}.muted{color:#76676c;font-size:13px}.row{border-top:1px solid #eee;padding:15px 0}.error{color:#b42318}.ok{color:#167344}
-</style></head><body><main class="wrap"><h1>Wedding Video Share</h1><p>Owner payment approval</p>
+</style></head><body><main class="wrap"><h1>Wedding Video Share</h1><p>Owner control panel</p>
 <section id="login" class="panel"><h3>Owner sign in</h3><p class="muted">Sign in only with the authorized owner email.</p><input id="email" type="email" value="ym6250067@gmail.com" readonly><button id="send">Send login link</button><p id="loginmsg" class="muted"></p></section>
-<section id="app" class="panel" hidden><div style="display:flex;justify-content:space-between;align-items:center"><b>Pending QR payments</b><button class="secondary" id="refresh">Refresh</button></div><p class="muted">Check that ₹290 has actually arrived in Paytm before approving. “I have paid” is only a request, not proof.</p><div id="payments">Loading…</div><button class="secondary" id="logout">Sign out</button></section>
+<section id="app" class="panel" hidden><div style="display:flex;justify-content:space-between;align-items:center"><b>Pending QR payments</b><button class="secondary" id="refresh">Refresh</button></div><p class="muted">Check that ₹290 has actually arrived in Paytm before approving. “I have paid” is only a request, not proof.</p><div id="payments">Loading…</div>
+<h3>Andee — Admin AI assistant</h3>
+<p class="muted">Private owner-only help for app operations, customer support steps and troubleshooting. Andee cannot approve payments or change accounts.</p>
+<div id="andeeMessages" style="min-height:90px;max-height:260px;overflow:auto;background:#fffaf6;border:1px solid #eadfd9;border-radius:12px;padding:12px;margin:10px 0">Ask Andee about Wedding Video Share administration.</div>
+<textarea id="andeeQuestion" rows="3" style="width:100%;padding:13px;border:1px solid #cbb9b2;border-radius:10px;font:inherit" placeholder="Ask Andee…"></textarea>
+<button id="askAndee">Ask Andee</button><span id="andeeStatus" class="muted"></span>
+<button class="secondary" id="logout">Sign out</button></section>
 <p id="notice" class="muted"></p></main>
 <script type="module">
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
@@ -17,6 +23,9 @@ async function load(){ $('payments').textContent='Loading…';try{const data=awa
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 $('send').onclick=async()=>{try{const {error}=await supabase.auth.signInWithOtp({email:adminEmail,options:{emailRedirectTo:'https://yuv693.github.io/wedding-video-share/admin.html'}});if(error)throw error;$('loginmsg').textContent='Login link sent to '+adminEmail+'. Open it on this device.'}catch(e){$('loginmsg').textContent=e.message}};
 $('refresh').onclick=load;$('logout').onclick=async()=>{await supabase.auth.signOut();location.reload()};
+function addAndeeLine(label,value){const line=document.createElement('p');line.style.whiteSpace='pre-wrap';const strong=document.createElement('b');strong.textContent=label+': ';line.append(strong,document.createTextNode(value));$('andeeMessages').append(line);$('andeeMessages').scrollTop=$('andeeMessages').scrollHeight}
+async function askAndee(){const question=$('andeeQuestion').value.trim();if(!question)return;$('askAndee').disabled=true;$('andeeStatus').textContent='Andee is thinking…';addAndeeLine('You',question);$('andeeQuestion').value='';try{const {data,error}=await supabase.functions.invoke('wedding-ai-assistant',{body:{question}});if(error)throw error;if(!data?.answer)throw new Error(data?.error||'Assistant unavailable');addAndeeLine('Andee',data.answer)}catch(e){$('andeeStatus').textContent=e.message}finally{$('askAndee').disabled=false;if($('andeeStatus').textContent==='Andee is thinking…')$('andeeStatus').textContent=''}}
+$('askAndee').onclick=askAndee;$('andeeQuestion').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();askAndee()}});
 $('payments').onclick=async e=>{const a=e.target.closest('[data-approve]'),r=e.target.closest('[data-reject]');if(!a&&!r)return;const id=(a||r).dataset.approve||(r&&r.dataset.reject);if(a&&!confirm('Have you confirmed the ₹290 payment in Paytm? Approve this customer?'))return;if(r&&!confirm('Reject this payment request?'))return;try{await call(a?'approve':'reject',{payment_id:id});await load()}catch(err){alert(err.message)}};
 supabase.auth.onAuthStateChange(()=>render());await render();
 </script></body></html>
