@@ -21,7 +21,8 @@ class _HomeScreenState extends State<HomeScreen> {
   final _uploadService = VideoUploadService();
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
-  bool _busy = false, _uploading = false, _autoDeleteConsent = false;
+  bool _busy = false, _uploading = false, _autoDeleteConsent = false, _pauseRequested = false;
+  String? _currentUploadName;
   String? _manualPaymentStatus;
   int _selectedTab = 0;
   double _uploadProgress = 0;
@@ -363,22 +364,33 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _status = 'These videos are already uploaded.');
       return;
     }
-    setState(() { _uploading = true; _busy = false; });
+    setState(() { _uploading = true; _busy = false; _pauseRequested = false; });
     var completed = 0;
     for (final item in pending) {
       if (!mounted) return;
       setState(() {
+        _currentUploadName = item.name;
         _status = 'Uploading video ${completed + 1} of ${pending.length}: ${item.name}';
         _uploadProgress = completed / pending.length;
       });
-      await _uploadService.upload(
-        orderId: _order!['id'].toString(),
-        file: item.toPlatformFile(),
-        streamFromOffset: item.streamFrom,
-        onProgress: (value) {
-          if (mounted) setState(() => _uploadProgress = (completed + value) / pending.length);
-        },
-      );
+      try {
+        await _uploadService.upload(
+          orderId: _order!['id'].toString(),
+          file: item.toPlatformFile(),
+          streamFromOffset: item.streamFrom,
+          shouldPause: () => _pauseRequested,
+          onProgress: (value) {
+            if (mounted) setState(() => _uploadProgress = (completed + value) / pending.length);
+          },
+        );
+      } on UploadPausedException {
+        if (mounted) setState(() {
+          _status = 'Upload paused safely. Tap Resume Upload to continue from the saved Google Drive checkpoint.';
+          _uploading = false;
+          _currentUploadName = null;
+        });
+        return;
+      }
       await PersistentVideo.remove(item.uri);
       completed++;
       if (mounted) {
@@ -395,6 +407,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _sharePin = null;
       _status = '${completed} video(s) uploaded successfully. You can share all videos using one private link.';
       _uploading = false;
+      _currentUploadName = null;
       _uploadProgress = 1;
     });
     await _loadOrder();
@@ -651,7 +664,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     const Text('This wedding has reached its 10-video limit or is locked.'),
                   if (_uploading) ...[
                     const SizedBox(height: 14),
-                    const Text('Uploading to your Google Drive…', style: TextStyle(fontWeight: FontWeight.w700)),
+                    Row(children: [
+                      const Expanded(child: Text('Uploading to your Google Drive…', style: TextStyle(fontWeight: FontWeight.w700))),
+                      TextButton.icon(
+                        onPressed: () => setState(() => _pauseRequested = true),
+                        icon: const Icon(Icons.pause_circle_outline),
+                        label: const Text('Pause'),
+                      ),
+                    ]),
+                    if (_currentUploadName != null) Text(_currentUploadName!, maxLines: 1, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 8),
                     LinearProgressIndicator(value: _uploadProgress),
                     const SizedBox(height: 6),
