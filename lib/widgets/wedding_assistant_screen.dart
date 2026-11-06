@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/backend.dart';
+
 /// In-app guided help for the Wedding Video Share customer journey.
 /// This first version uses verified product rules locally; it does not send
 /// customer messages, PINs, payment details or videos to an AI provider.
@@ -26,6 +28,7 @@ class WeddingAssistantScreen extends StatefulWidget {
 class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
+  bool _sending = false;
   final List<_ChatLine> _messages = [
     const _ChatLine(
       false,
@@ -40,47 +43,58 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
     super.dispose();
   }
 
-  void _ask(String question) {
-    final q = question.toLowerCase();
-    String answer;
-    if (q.contains('payment') || q.contains('₹290') || q.contains('pay') || q.contains('qr')) {
-      answer = 'Your payment status is: ${widget.paymentStatus}. QR/UPI requests show as pending until the owner checks the real Paytm receipt and approves them. “I have paid” is only a request, not proof. Never share your UPI PIN or OTP.';
-    } else if (q.contains('drive') || q.contains('google')) {
-      answer = widget.driveEmail.isEmpty
-          ? 'Google Drive is not currently shown as connected. Open the Videos tab and tap Connect Google Drive before uploading.'
-          : 'Google Drive is connected as ${widget.driveEmail}. Your video is stored in your own Drive.';
-    } else if (q.contains('upload') || q.contains('video') || q.contains('40 gb') || q.contains('size')) {
-      answer = 'Video status: ${widget.uploadStatus}. This plan supports one wedding video up to 40 GB. Choose the same file again if an interrupted upload needs to resume. Your phone original is not deleted.';
-    } else if (q.contains('link') || q.contains('share') || q.contains('pin') || q.contains('password')) {
-      answer = widget.paymentStatus == 'paid'
-          ? 'After your video is uploaded and payment is verified, open the Videos tab and create or refresh the private guest link. Send the six-digit download password separately from the link.'
-          : 'First upload your video, then complete the ₹290 payment. The private guest link and six-digit password are available after the server verifies payment.';
-    } else if (q.contains('download') || q.contains('guest') || q.contains('receiver')) {
-      answer = 'The guest opens the private link, enters the six-digit password and downloads the video. The server checks the full transfer before marking it complete. An interrupted transfer is not treated as completed.';
-    } else if (q.contains('new wedding') || q.contains('another') || q.contains('second')) {
-      answer = 'Each customer account is for one wedding-video sharing cycle. To share another wedding, use the Account tab and choose Start another wedding. It creates a separate account and needs a separate ₹290 payment.';
-    } else if (q.contains('status') || q.contains('account') || q.contains('pending')) {
-      answer = 'Here is the current app status: Google Drive: ${widget.driveEmail.isEmpty ? 'not connected' : widget.driveEmail}; video: ${widget.uploadStatus}; payment: ${widget.paymentStatus}; manual QR request: ${widget.manualPaymentStatus}; upload locked: ${widget.uploadLocked ? 'yes' : 'no'}. Pull down on Home to refresh.';
-    } else if (q.contains('delete') || q.contains('remove')) {
-      answer = 'Only the Google Drive copy can be deleted from the app. Your original phone video is not deleted. Automatic deletion after a guest download happens only when you explicitly consent and the server verifies the full transfer.';
-    } else {
-      answer = 'I can help with Google Drive connection, video upload, ₹290 QR payment, private sharing links, guest downloads and starting another wedding. Try one of those topics. For account-specific errors, share the exact error message with support, but never send passwords, OTPs or UPI PINs.';
-    }
+  Future<void> _ask(String question) async {
+    final trimmed = question.trim();
+    if (trimmed.isEmpty || _sending) return;
 
     setState(() {
-      _messages.add(_ChatLine(true, question));
-      _messages.add(_ChatLine(false, answer));
+      _messages.add(_ChatLine(true, trimmed));
+      _sending = true;
     });
     _controller.clear();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
+
+    try {
+      final response = await supabase.functions.invoke(
+        'wedding-ai-assistant',
+        body: {
+          'question': trimmed,
+          'appStatus': {
+            'paymentStatus': widget.paymentStatus,
+            'uploadStatus': widget.uploadStatus,
+            'driveConnected': widget.driveEmail.isNotEmpty,
+            'manualPaymentStatus': widget.manualPaymentStatus,
+            'uploadLocked': widget.uploadLocked,
+          },
+        },
+      );
+      final data = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : <String, dynamic>{};
+      if (response.status != 200 || data['answer'] is! String) {
+        throw Exception(data['error']?.toString() ?? 'AI assistant is unavailable.');
       }
-    });
+      if (!mounted) return;
+      setState(() => _messages.add(_ChatLine(false, data['answer'] as String)));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _messages.add(const _ChatLine(
+        false,
+        'AI assistant abhi connect nahi ho pa raha. Thodi der baad dobara try karein. Payment, OTP, UPI PIN ya guest password chat mein share na karein.',
+      )));
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      }
+    }
   }
 
   @override
@@ -155,6 +169,10 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
             },
           ),
         ),
+        if (_sending) ...[
+          const SizedBox(height: 8),
+          const LinearProgressIndicator(),
+        ],
         const SizedBox(height: 10),
         Row(
           children: [
@@ -172,7 +190,7 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
             ),
             const SizedBox(width: 8),
             IconButton.filled(
-              onPressed: () { final value = _controller.text.trim(); if (value.isNotEmpty) _ask(value); },
+              onPressed: _sending ? null : () { final value = _controller.text.trim(); if (value.isNotEmpty) _ask(value); },
               style: IconButton.styleFrom(backgroundColor: burgundy, foregroundColor: Colors.white),
               icon: const Icon(Icons.send_rounded),
             ),
@@ -180,7 +198,7 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          'This first version uses built-in help rules, not a live generative AI service. It cannot approve payments or access private bank information.',
+          'AI answers are for guidance only. Payment approval is done by the owner after checking the real receipt. Never share OTP, UPI PIN, passwords or guest download PIN here.',
           style: TextStyle(fontSize: 11, color: Colors.black54),
         ),
       ],
