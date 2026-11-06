@@ -27,6 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   double _uploadProgress = 0;
   String? _status, _driveEmail, _shareUrl, _sharePin;
   Map<String, dynamic>? _order, _quota, _video;
+  List<Map<String, dynamic>> _videos = [];
   List<Map<String, dynamic>> _notifications = [];
 
   @override
@@ -103,13 +104,18 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
       setState(() => _order = row);
       if (row != null) {
-        final video = await supabase.from('wedding_videos')
+        final videos = await supabase.from('wedding_videos')
           .select('id,original_filename,file_size_bytes,upload_status,google_drive_account_email,deleted_at,auto_delete_consent_at')
           .eq('order_id', row['id'])
-          .maybeSingle();
-        if (mounted) setState(() { _video = video; _autoDeleteConsent = video?['auto_delete_consent_at'] != null; });
+          .order('created_at', ascending: true);
+        if (mounted) setState(() {
+          _videos = videos.map((v) => _map(v)).toList();
+          _video = _videos.isNotEmpty ? _videos.first : null;
+          final activeVideos = _videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).toList();
+          _autoDeleteConsent = activeVideos.isNotEmpty && activeVideos.every((v) => v['auto_delete_consent_at'] != null);
+        });
       } else {
-        setState(() { _video = null; _autoDeleteConsent = false; });
+        setState(() { _video = null; _videos = []; _autoDeleteConsent = false; });
       }
     } catch (_) {
       if (mounted) setState(() => _status = 'Account status could not be loaded. Pull down to refresh.');
@@ -281,8 +287,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _chooseAndUpload() async {
-    if (_order?['upload_locked'] == true || _video != null) {
-      setState(() => _status = 'This account has already used its one video slot. Create a new account for another wedding.');
+    if (_order?['upload_locked'] == true || _videos.length >= 10) {
+      setState(() => _status = 'This wedding has reached its 10-video limit. Create a new account for another wedding.');
       return;
     }
     setState(() { _busy = true; _status = null; _uploadProgress = 0; });
@@ -298,27 +304,46 @@ class _HomeScreenState extends State<HomeScreen> {
       if (_order == null) throw Exception('Your wedding upload could not be prepared. Please refresh and try again.');
       final result = await FilePicker.platform.pickFiles(
         type: FileType.video,
-        allowMultiple: false,
+        allowMultiple: true,
         withReadStream: true,
         withData: false,
       );
       if (result == null || result.files.isEmpty) return;
-      final file = result.files.single;
+      if (result.files.length > 10 || _videos.length + result.files.length > 10) {
+        throw Exception('You can upload up to 10 videos in one wedding. Select fewer videos.');
+      }
       if (!mounted) return;
-      setState(() { _uploading = true; _busy = false; _status = 'Uploading ${file.name}…'; });
-      await _uploadService.upload(
-        orderId: _order!['id'].toString(),
-        file: file,
-        onProgress: (value) {
-          if (mounted) setState(() => _uploadProgress = value);
-        },
-      );
+      setState(() { _uploading = true; _busy = false; });
+      var completed = 0;
+      var skipped = 0;
+      for (final file in result.files) {
+        final alreadyUploaded = _videos.any((v) =>
+          v['original_filename'] == file.name &&
+          (v['file_size_bytes'] as num?)?.toInt() == file.size &&
+          v['upload_status'] == 'uploaded');
+        if (alreadyUploaded) { skipped++; completed++; continue; }
+        if (!mounted) return;
+        setState(() {
+          _status = 'Uploading video ${completed + 1} of ${result.files.length}: ${file.name}';
+          _uploadProgress = completed / result.files.length;
+        });
+        await _uploadService.upload(
+          orderId: _order!['id'].toString(),
+          file: file,
+          onProgress: (value) {
+            if (mounted) setState(() => _uploadProgress = (completed + value) / result.files.length);
+          },
+        );
+        completed++;
+        await _loadOrder();
+      }
       if (!mounted) return;
       setState(() {
         _shareUrl = null;
         _sharePin = null;
-        _status = 'Video uploaded successfully. Pay ₹290 when you are ready to share it.';
+        _status = '${completed - skipped} video(s) uploaded successfully. You can share all videos using one private link.';
         _uploading = false;
+        _uploadProgress = 1;
       });
       await _loadOrder();
     } catch (e) {
@@ -332,29 +357,32 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _updateAutoDeleteConsent(bool consent) async {
-    if (_video == null || _video!['id'] == null) return;
+    final targets = _videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).toList();
+    if (targets.isEmpty) return;
     final previous = _autoDeleteConsent;
     setState(() { _autoDeleteConsent = consent; _status = null; });
     try {
-      final response = await supabase.functions.invoke('google-drive-storage', body: {
-        'action': 'set_auto_delete_consent',
-        'videoId': _video!['id'],
-        'consent': consent,
-      });
-      final data = _map(response.data);
-      if (response.status != 200 || data['ok'] != true) {
-        throw Exception(data['error']?.toString() ?? 'Could not update automatic deletion consent.');
+      for (final video in targets) {
+        final response = await supabase.functions.invoke('google-drive-storage', body: {
+          'action': 'set_auto_delete_consent',
+          'videoId': video['id'],
+          'consent': consent,
+        });
+        final data = _map(response.data);
+        if (response.status != 200 || data['ok'] != true) {
+          throw Exception(data['error']?.toString() ?? 'Could not update automatic deletion consent.');
+        }
       }
       if (mounted) setState(() => _status = consent
-        ? 'Automatic Google Drive deletion is enabled after the receiver’s full verified download.'
-        : 'Automatic Google Drive deletion consent has been withdrawn. Your Drive copy will be kept.');
+        ? 'Automatic Google Drive deletion is enabled for all videos after each receiver download is verified.'
+        : 'Automatic Google Drive deletion consent has been withdrawn. Your Drive copies will be kept.');
     } catch (e) {
       if (mounted) setState(() { _autoDeleteConsent = previous; _status = 'Consent update: $e'; });
     }
   }
 
   Future<void> _makeShareLink() async {
-    if (_order == null || _video?['upload_status'] != 'uploaded') return;
+    if (_order == null || !_videos.any((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null)) return;
     if (_order?['payment_status'] != 'paid') {
       await _startPayment();
       return;
@@ -456,9 +484,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = supabase.auth.currentUser;
     final paid = _order?['payment_status'] == 'paid';
     final locked = _order?['upload_locked'] == true;
-    final videoReady = _video?['upload_status'] == 'uploaded';
-    final videoDeleted = _video?['upload_status'] == 'deleted';
-    final videoSlotUsed = _video != null;
+    final videoReady = _videos.any((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null);
+    final videoDeleted = _videos.isNotEmpty && _videos.every((v) => v['upload_status'] == 'deleted');
+    final videoSlotUsed = _videos.isNotEmpty;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Wedding Video Share', style: TextStyle(fontWeight: FontWeight.w800)),
@@ -510,7 +538,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Text('Your Wedding', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
                   const Text('₹290  •  One-Wedding Plan'),
-                  const Text('Upload one wedding video up to 40 GB.'),
+                  const Text('Upload up to 10 wedding videos, each up to 40 GB.'),
                   const Text('Maximum video size: 40 GB (decimal).'),
                   const SizedBox(height: 12),
                   if (paid)
@@ -552,20 +580,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   const Text('Upload without the guesswork.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 8),
-                  const Text('Choose one video up to 40 GB. It uploads to your own Google Drive; your phone original is never deleted. If the connection stops, choose the same file again to resume.'),
+                  const Text('Choose up to 10 videos together. They upload one by one to your own Google Drive; phone originals are never deleted. If the connection stops, select the same videos again to resume.'),
                   const SizedBox(height: 12),
                   if (videoReady)
-                    Text('Uploaded: ${_video!['original_filename']} (${_bytes(_video!['file_size_bytes'])})')
+                    ..._videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).map((v) => Text('Uploaded: ${v['original_filename']} (${_bytes(v['file_size_bytes'])})')).toList(),
                   else if (videoDeleted)
                     const Text('Your Google Drive copy was deleted by you. The phone original remains untouched; this one-video plan cannot be reused.')
                   else if (videoSlotUsed)
-                    const Text('This account has already used its one video slot. Create a new account for another wedding video.')
+                    const Text('This account has already used its video slots. Create a new account for another wedding.')
                   else
                     FilledButton.icon(
                       onPressed: _busy || _uploading || locked || _driveEmail == null ? null : _chooseAndUpload,
                       style: FilledButton.styleFrom(backgroundColor: burgundy),
                       icon: const Icon(Icons.video_file),
-                      label: const Text('Choose your wedding video'),
+                      label: const Text('Choose up to 10 wedding videos'),
                     ),
                   if (_uploading) ...[
                     const SizedBox(height: 14),
@@ -577,7 +605,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ],
                   if (!paid) const Text('Payment is needed only when you share your uploaded video.', style: TextStyle(color: Colors.black54)),
                   if (_driveEmail == null) const Text('Connect Google Drive before uploading.', style: TextStyle(color: Colors.black54)),
-                  if (locked) const Text('This account cannot upload another video.', style: TextStyle(color: Colors.black54)),
+                  if (locked) const Text('This account cannot upload more videos.', style: TextStyle(color: Colors.black54)),
                 ]),
               )),
               if (videoReady) ...[
@@ -594,7 +622,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       value: _autoDeleteConsent,
                       onChanged: _busy || _uploading ? null : (value) => unawaited(_updateAutoDeleteConsent(value == true)),
                       controlAffinity: ListTileControlAffinity.leading,
-                      title: const Text('I agree: automatically delete my Google Drive video after the receiver’s full download is verified.'),
+                      title: const Text('I agree: automatically delete each Google Drive video after its full receiver download is verified.'),
                       subtitle: const Text('Only the Google Drive copy is deleted. The original on your phone is not touched. If the download is interrupted or cannot be verified, the Drive copy is kept.'),
                     ),
                     if (!paid && _manualPaymentStatus == 'pending')
