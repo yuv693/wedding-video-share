@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
 import '../widgets/account_access_card.dart';
+import '../widgets/wedding_assistant_screen.dart';
 import '../services/video_upload_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -476,6 +477,7 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.video_library_outlined), selectedIcon: Icon(Icons.video_library_rounded), label: 'Videos'),
           NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Account'),
+          NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), selectedIcon: Icon(Icons.auto_awesome), label: 'Help'),
         ],
       ),
       body: SafeArea(
@@ -664,6 +666,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ],
+              ],
+              if (_selectedTab == 3) ...[
+                WeddingAssistantScreen(
+                  paymentStatus: _order?['payment_status']?.toString() ?? 'not started',
+                  uploadStatus: _video?['upload_status']?.toString() ?? 'not uploaded',
+                  driveEmail: _driveEmail ?? '',
+                  manualPaymentStatus: _manualPaymentStatus ?? 'no request',
+                  uploadLocked: _order?['upload_locked'] == true,
+                ),
               ],
               if (_selectedTab == 2) ...[
               const SizedBox(height: 12),
