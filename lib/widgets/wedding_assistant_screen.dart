@@ -131,8 +131,8 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
   Future<void> _speakAnswer(String text) async {
     try {
       await _tts.stop();
-      final hasGujarati = RegExp(r'[\\u0A80-\\u0AFF]').hasMatch(text);
-      final hasHindi = RegExp(r'[\\u0900-\\u097F]').hasMatch(text);
+      final hasGujarati = RegExp(r'[\u0A80-\u0AFF]').hasMatch(text);
+      final hasHindi = RegExp(r'[\u0900-\u097F]').hasMatch(text);
       await _tts.setLanguage(hasGujarati ? 'gu-IN' : (hasHindi ? 'hi-IN' : 'en-IN'));
       await _tts.speak(text);
     } catch (_) {}
