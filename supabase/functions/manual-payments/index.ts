@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
       const customerId = ctx.userClaims?.id;
       if (typeof customerId !== "string" || !customerId) return json({ error: "AUTH_REQUIRED" }, 401);
       const admin = adminClient();
-      const { data: order, error: orderError } = await admin.from("wedding_orders")
+      let { data: order, error: orderError } = await admin.from("wedding_orders")
         .select("id,payment_status,upload_locked")
         .eq("customer_id", customerId)
         .maybeSingle();
