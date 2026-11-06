@@ -327,7 +327,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!mounted) return;
         setState(() {
           _status = 'Uploading video ${completed + 1} of ${newFiles.length}: ${file.name}';
-          _uploadProgress = completed / result.files.length;
+          _uploadProgress = completed / newFiles.length;
         });
         await _uploadService.upload(
           orderId: _order!['id'].toString(),
