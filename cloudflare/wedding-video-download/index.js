@@ -17,14 +17,20 @@ async function control(env, payload) {
   if (!response.ok || !data || data.ok === false) throw new Error(data?.error || "DOWNLOAD_CONTROL_REQUEST_FAILED");
   return data;
 }
-function page(token, error = "") {
+function page(token, error = "", videos = null, pin = "") {
   const safeToken = encodeURIComponent(token);
-  const message = error ? '<p class="error">' + error + '</p>' : '';
-  return `<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wedding Video Share</title>
-  <style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#f7f1eb;color:#33252a;font-family:Arial,sans-serif;display:grid;place-items:center;padding:20px}.card{background:white;width:min(100%,420px);padding:30px;border-radius:22px;box-shadow:0 12px 40px #45202a18;text-align:center}.heart{font-size:34px;color:#6f2438}h1{font-size:24px;color:#6f2438;margin:12px 0}p{line-height:1.5;color:#66575b}.pin{width:100%;padding:16px;border:1px solid #d8c7c3;border-radius:12px;font-size:25px;text-align:center;letter-spacing:10px;margin:12px 0}.btn{width:100%;border:0;background:#6f2438;color:white;padding:16px;border-radius:12px;font-size:16px;font-weight:bold}.error{color:#b42318;font-size:14px}</style>
-  <body><main class="card"><div class="heart">♥</div><h1>Your wedding video</h1><p>Enter the 6-digit download password shared with you by the sender.</p>${message}
-  <form method="POST" action="/?token=${safeToken}"><input class="pin" name="pin" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" minlength="6" placeholder="••••••" autocomplete="one-time-code" required><button class="btn" type="submit">Verify & Download</button></form>
-  <p style="font-size:12px;line-height:1.5;margin-top:18px">The sender will receive a completion update after the full video transfer is verified. If the sender has agreed, their Google Drive copy is automatically deleted only after the full video has been streamed and the server verifies the complete byte count.</p><p style="font-size:11px;color:#8a7a7d">Wedding Video Share · Keep this password private</p></main></body></html>`;
+  const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  const bytes = value => { const n=Number(value)||0; return n>=1073741824?(n/1073741824).toFixed(2)+" GB":n>=1048576?(n/1048576).toFixed(1)+" MB":Math.round(n/1024)+" KB"; };
+  const message = error ? '<p class="error">' + esc(error) + '</p>' : "";
+  let content = "";
+  if (videos) {
+    content = '<p>Your private wedding videos are ready. Download them one by one.</p><div class="videos">' +
+      videos.map((v,i) => '<div class="video"><b>'+(i+1)+'. '+esc(v.filename)+'</b><p class="size">'+bytes(v.expectedBytes)+'</p><form method="POST" action="/?token='+safeToken+'"><input type="hidden" name="pin" value="'+esc(pin)+'"><input type="hidden" name="videoId" value="'+esc(v.id)+'"><button class="btn" type="submit">Download this video</button></form></div>').join("") +
+      '</div><p class="small">If a transfer is interrupted, return to the link and enter the same password again.</p>';
+  } else {
+    content = '<p>Enter the 6-digit download password shared with you by the sender.</p><form method="POST" action="/?token='+safeToken+'"><input class="pin" name="pin" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" minlength="6" placeholder="••••••" autocomplete="one-time-code" required><button class="btn" type="submit">Verify & View Videos</button></form>';
+  }
+  return '<!doctype html><html lang="en"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Wedding Video Share</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;background:#f7f1eb;color:#33252a;font-family:Arial,sans-serif;display:grid;place-items:center;padding:20px}.card{background:white;width:min(100%,480px);padding:30px;border-radius:22px;box-shadow:0 12px 40px #45202a18;text-align:center}.heart{font-size:34px;color:#6f2438}h1{font-size:24px;color:#6f2438;margin:12px 0}p{line-height:1.5;color:#66575b}.pin{width:100%;padding:16px;border:1px solid #d8c7c3;border-radius:12px;font-size:25px;text-align:center;letter-spacing:10px;margin:12px 0}.btn{width:100%;border:0;background:#6f2438;color:white;padding:14px;border-radius:12px;font-size:15px;font-weight:bold}.error{color:#b42318;font-size:14px}.videos{text-align:left}.video{border:1px solid #eadfd9;border-radius:14px;padding:14px;margin:12px 0}.size,.small{font-size:12px;color:#88777b;margin:6px 0 12px}.small{text-align:center;margin-top:18px}</style><body><main class="card"><div class="heart">♥</div><h1>Your wedding memories</h1>'+message+content+'<p style="font-size:11px;color:#8a7a7d;margin-top:18px">Wedding Video Share · Keep this password private</p></main></body></html>';
 }
 export default {
  async fetch(request, env) {
@@ -33,11 +39,21 @@ export default {
   if (!/^[a-f0-9]{64}$/.test(token)) return new Response("Invalid or expired share link.", {status:404});
   if (request.method === "GET") return new Response(page(token), {headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}});
   if (request.method !== "POST") return new Response("Method not allowed.",{status:405});
-  let pin = "";
-  try { const form = await request.formData(); pin = String(form.get("pin") || ""); } catch (_) {}
+  let pin = "", videoId = "";
+  try { const form = await request.formData(); pin = String(form.get("pin") || ""); videoId = String(form.get("videoId") || ""); } catch (_) {}
   if (!/^\d{6}$/.test(pin)) return new Response(page(token,"Please enter the 6-digit password."),{status:400,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
+  if (!videoId) {
+    try {
+      const listing = await control(env,{action:"worker_list",token,pin});
+      return new Response(page(token,"",listing.videos || [],pin),{headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store","x-content-type-options":"nosniff"}});
+    } catch (e) {
+      const msg = String(e.message || "");
+      const userMessage = msg === "PIN_INVALID_OR_LOCKED" ? "Password is incorrect or temporarily locked. Check with the sender." : "This link is invalid or the videos are unavailable.";
+      return new Response(page(token,userMessage),{status:403,headers:{"content-type":"text/html; charset=utf-8","cache-control":"no-store"}});
+    }
+  }
   let session;
-  try { session = await control(env,{action:"worker_prepare",token,pin}); }
+  try { session = await control(env,{action:"worker_prepare",token,pin,videoId}); }
   catch (e) {
     const msg = String(e.message || "");
     const userMessage = msg === "PIN_INVALID_OR_LOCKED" ? "Password is incorrect or temporarily locked. Check with the sender." : "This link is invalid or the video is unavailable.";
