@@ -4,13 +4,11 @@ import 'package:app_links/app_links.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
 import '../widgets/account_access_card.dart';
-import '../widgets/wedding_assistant_screen.dart';
 import '../services/video_upload_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -23,7 +21,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final _uploadService = VideoUploadService();
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
-  StreamSubscription<dynamic>? _andeeOverlaySubscription;
   bool _busy = false, _uploading = false, _autoDeleteConsent = false;
   String? _manualPaymentStatus;
   int _selectedTab = 0;
@@ -36,9 +33,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _linkSubscription = _appLinks.uriLinkStream.listen(_handleIncomingLink);
-    _andeeOverlaySubscription = FlutterOverlayWindow.overlayListener.listen((event) {
-      if (event == 'open_andee' && mounted) setState(() => _selectedTab = 3);
-    });
     unawaited(_loadInitialLink());
     _refresh();
   }
@@ -46,7 +40,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _linkSubscription?.cancel();
-    _andeeOverlaySubscription?.cancel();
     super.dispose();
   }
 
@@ -483,7 +476,6 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.video_library_outlined), selectedIcon: Icon(Icons.video_library_rounded), label: 'Videos'),
           NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Account'),
-          NavigationDestination(icon: Icon(Icons.auto_awesome_outlined), selectedIcon: Icon(Icons.auto_awesome), label: 'Help'),
         ],
       ),
       body: SafeArea(
@@ -672,15 +664,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ],
-              ],
-              if (_selectedTab == 3) ...[
-                WeddingAssistantScreen(
-                  paymentStatus: _order?['payment_status']?.toString() ?? 'not started',
-                  uploadStatus: _video?['upload_status']?.toString() ?? 'not uploaded',
-                  driveEmail: _driveEmail ?? '',
-                  manualPaymentStatus: _manualPaymentStatus ?? 'no request',
-                  uploadLocked: _order?['upload_locked'] == true,
-                ),
               ],
               if (_selectedTab == 2) ...[
               const SizedBox(height: 12),
