@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
 import '../services/backend.dart';
 
@@ -29,6 +30,42 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   bool _sending = false;
+  bool _overlayBusy = false;
+
+  Future<void> _enableFloatingAndee() async {
+    if (_overlayBusy) return;
+    setState(() => _overlayBusy = true);
+    try {
+      var granted = await FlutterOverlayWindow.isPermissionGranted();
+      if (granted != true) {
+        granted = await FlutterOverlayWindow.requestPermission() ?? false;
+      }
+      if (granted != true) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please allow Display over other apps for Wedding Video Share.')),
+        );
+        return;
+      }
+      await FlutterOverlayWindow.showOverlay(
+        height: 72,
+        width: 72,
+        alignment: OverlayAlignment.centerRight,
+        enableDrag: true,
+        positionGravity: PositionGravity.auto,
+        overlayTitle: 'Andee AI is ready',
+        overlayContent: 'Tap the floating Andee bubble to open Help in Wedding Video Share.',
+      );
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Floating Andee is on. You can drag the bubble around your screen.')),
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not start Floating Andee: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _overlayBusy = false);
+    }
+  }
   final List<_ChatLine> _messages = [
     const _ChatLine(
       false,
@@ -129,6 +166,16 @@ class _WeddingAssistantScreenState extends State<WeddingAssistantScreen> {
               ),
             ],
           ),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: _overlayBusy ? null : _enableFloatingAndee,
+          icon: const Icon(Icons.bubble_chart_outlined),
+          label: Text(_overlayBusy ? 'Starting Andee…' : 'Enable Floating Andee'),
+        ),
+        const Text(
+          'Android will ask once for permission to display the Andee bubble over other apps. Tap the bubble to switch to the Andee Help tab in this app.',
+          style: TextStyle(fontSize: 11, color: Colors.black54),
         ),
         const SizedBox(height: 12),
         Wrap(
