@@ -61,13 +61,12 @@ async function redirectForToken(token: string) {
   }
   const { data: order } = await admin.from("wedding_orders").select("id,customer_id,payment_status").eq("id", share.order_id).maybeSingle();
   if (!order || order.payment_status !== "paid") return new Response("This video is not available.", { status: 404 });
-  const { data: video } = await admin.from("wedding_videos").select("id,google_drive_file_id,original_filename,mime_type,file_size_bytes,upload_status").eq("order_id", order.id).maybeSingle();
-  if (!video || video.upload_status !== "uploaded" || !video.google_drive_file_id) return new Response("This video is not available.", { status: 404 });
-  const { token: googleToken } = await accessToken(admin, order.customer_id);
-  const check = await driveFetch("https://www.googleapis.com/drive/v3/files/" + encodeURIComponent(video.google_drive_file_id) + "?fields=id,trashed,size", googleToken);
-  const meta = await check.json();
-  if (!check.ok || meta.trashed || String(meta.size) !== String(video.file_size_bytes)) return new Response("The video could not be verified in Google Drive.", { status: 503 });
-  await admin.from("audit_events").insert({ order_id: order.id, event_type: "receiver_download_link_opened", event_data: { video_id: video.id } });
+  const { data: videos } = await admin.from("wedding_videos")
+    .select("id,original_filename,file_size_bytes,upload_status")
+    .eq("order_id", order.id).eq("upload_status", "uploaded").is("deleted_at", null)
+    .order("created_at", { ascending: true }).limit(10);
+  if (!videos || videos.length === 0) return new Response("No videos are available.", { status: 404 });
+  await admin.from("audit_events").insert({ order_id: order.id, event_type: "receiver_download_link_opened", event_data: { video_count: videos.length } });
   return Response.redirect("https://wedding-video-download.weddingvideoshare-ym.workers.dev/?token=" + encodeURIComponent(token), 302);
 }
 
@@ -77,6 +76,25 @@ async function workerInternal(req: Request, body: Record<string, unknown>) {
  const admin=adminClient();
  const {data:authorized}=await admin.rpc("verify_download_worker_secret",{p_secret_hash:await hash(supplied)});
  if(!supplied||authorized!==true)return json({error:"WORKER_AUTH_FAILED"},401);
+ if(body.action==="worker_list"){
+  const t=String(body.token??"");
+  if(!/^[a-f0-9]{64}$/.test(t))return json({error:"SHARE_INVALID"},404);
+  const {data:s}=await admin.from("share_links").select("id,order_id,is_active,expires_at,revoked_at").eq("token_hash",await hash(t)).maybeSingle();
+  if(!s||!s.is_active||s.revoked_at||(s.expires_at&&new Date(s.expires_at).getTime()<=Date.now()))return json({error:"SHARE_INVALID"},404);
+  const pin=String(body.pin??"");
+  if(!/^\\d{6}$/.test(pin))return json({error:"PIN_REQUIRED"},400);
+  const candidateHash=await hash(t+":"+pin);
+  const {data:pinOk,error:pinError}=await admin.rpc("verify_share_download_pin",{p_token_hash:await hash(t),p_candidate_hash:candidateHash});
+  if(pinError||pinOk!==true)return json({error:"PIN_INVALID_OR_LOCKED"},403);
+  const {data:o}=await admin.from("wedding_orders").select("id,payment_status").eq("id",s.order_id).maybeSingle();
+  if(!o||o.payment_status!=="paid")return json({error:"VIDEO_UNAVAILABLE"},404);
+  const {data:videos,error}=await admin.from("wedding_videos")
+    .select("id,original_filename,mime_type,file_size_bytes,upload_status,auto_delete_consent_at")
+    .eq("order_id",o.id).eq("upload_status","uploaded").is("deleted_at",null)
+    .order("created_at",{ascending:true}).limit(10);
+  if(error||!videos||videos.length===0)return json({error:"VIDEO_UNAVAILABLE"},404);
+  return json({ok:true,videos:videos.map((v:any)=>({id:v.id,filename:v.original_filename,mimeType:v.mime_type||"application/octet-stream",expectedBytes:Number(v.file_size_bytes),autoDeleteConsent:v.auto_delete_consent_at!==null}))});
+ }
  if(body.action==="worker_prepare"){
   const t=String(body.token??"");
   if(!/^[a-f0-9]{64}$/.test(t))return json({error:"SHARE_INVALID"},404);
@@ -89,9 +107,10 @@ async function workerInternal(req: Request, body: Record<string, unknown>) {
   if(pinError||pinOk!==true)return json({error:"PIN_INVALID_OR_LOCKED"},403);
   const {data:o}=await admin.from("wedding_orders").select("id,customer_id,payment_status").eq("id",s.order_id).maybeSingle();
   if(!o||o.payment_status!=="paid")return json({error:"VIDEO_UNAVAILABLE"},404);
-  const {data:v}=await admin.from("wedding_videos").select("id,google_drive_file_id,original_filename,mime_type,file_size_bytes,upload_status,auto_delete_consent_at").eq("order_id",o.id).maybeSingle();
+  const videoId=String(body.videoId??"");
+  if(!videoId)return json({error:"VIDEO_ID_REQUIRED"},400);
+  const {data:v}=await admin.from("wedding_videos").select("id,google_drive_file_id,original_filename,mime_type,file_size_bytes,upload_status,auto_delete_consent_at").eq("order_id",o.id).eq("id",videoId).maybeSingle();
   if(!v||v.upload_status!=="uploaded"||!v.google_drive_file_id)return json({error:"VIDEO_UNAVAILABLE"},404);
-  if(!v.auto_delete_consent_at)return json({error:"AUTO_DELETE_CONSENT_REQUIRED"},400);
   const {token}=await accessToken(admin,o.customer_id);
   const check=await driveFetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(v.google_drive_file_id)+"?fields=id,size,trashed",token);
   const meta=await check.json();
@@ -153,8 +172,11 @@ Deno.serve(async (req) => {
       const customerId = ctx.userClaims.sub;
       const { data: order } = await admin.from("wedding_orders").select("id,customer_id,payment_status,upload_locked").eq("id", orderId).eq("customer_id", customerId).maybeSingle();
       if (!order || order.payment_status !== "paid") throw new Error("ORDER_NOT_FOUND");
-      const { data: video } = await admin.from("wedding_videos").select("id,google_drive_file_id,upload_status").eq("order_id", orderId).eq("customer_id", customerId).is("deleted_at", null).maybeSingle();
-      if (!video || video.upload_status !== "uploaded" || !video.google_drive_file_id) throw new Error("VIDEO_NOT_READY");
+      const { data: videos, error: videosError } = await admin.from("wedding_videos")
+        .select("id,google_drive_file_id,upload_status")
+        .eq("order_id", orderId).eq("customer_id", customerId)
+        .eq("upload_status", "uploaded").is("deleted_at", null);
+      if (videosError || !videos || videos.length === 0 || videos.some((v: any) => !v.google_drive_file_id)) throw new Error("VIDEO_NOT_READY");
       const { token: googleToken } = await accessToken(admin, customerId);
       const rawToken = new Uint8Array(32);
       crypto.getRandomValues(rawToken);
@@ -173,7 +195,7 @@ Deno.serve(async (req) => {
         shareError = created.error;
       }
       if (shareError) throw new Error("SHARE_CREATE_FAILED");
-      await admin.from("audit_events").insert({ actor_user_id: customerId, order_id: orderId, event_type: "google_drive_share_link_created", event_data: { video_id: video.id } });
+      await admin.from("audit_events").insert({ actor_user_id: customerId, order_id: orderId, event_type: "google_drive_share_link_created", event_data: { video_ids: videos.map((v: any) => v.id), video_count: videos.length } });
       const base = Deno.env.get("SUPABASE_URL");
       return json({ ok: true, shareUrl: base + "/functions/v1/wedding-share?token=" + shareToken, downloadPin, note: "Send the private link and six-digit PIN separately. Five wrong attempts lock the PIN for 15 minutes." });
     } catch (e) {
