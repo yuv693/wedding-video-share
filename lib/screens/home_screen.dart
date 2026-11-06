@@ -26,7 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _selectedTab = 0;
   double _uploadProgress = 0;
   String? _status, _driveEmail, _shareUrl, _sharePin;
-  Map<String, dynamic>? _order, _quota, _video;
+  Map<String, dynamic>? _order, _quota;
   List<Map<String, dynamic>> _videos = [];
   List<Map<String, dynamic>> _notifications = [];
 
@@ -110,12 +110,11 @@ class _HomeScreenState extends State<HomeScreen> {
           .order('created_at', ascending: true);
         if (mounted) setState(() {
           _videos = videos.map((v) => _map(v)).toList();
-          _video = _videos.isNotEmpty ? _videos.first : null;
           final activeVideos = _videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).toList();
           _autoDeleteConsent = activeVideos.isNotEmpty && activeVideos.every((v) => v['auto_delete_consent_at'] != null);
         });
       } else {
-        setState(() { _video = null; _videos = []; _autoDeleteConsent = false; });
+        setState(() { _videos = []; _autoDeleteConsent = false; });
       }
     } catch (_) {
       if (mounted) setState(() => _status = 'Account status could not be loaded. Pull down to refresh.');
