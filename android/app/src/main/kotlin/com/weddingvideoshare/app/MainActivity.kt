@@ -16,6 +16,7 @@ class MainActivity : FlutterActivity() {
     private val channelName = "wedding_video_share/persistent_upload"
     private val pickRequestCode = 7412
     private var pendingPickerResult: MethodChannel.Result? = null
+    private var pickerOrderId: String = ""
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -27,6 +28,7 @@ class MainActivity : FlutterActivity() {
                             result.error("PICK_IN_PROGRESS", "A video picker is already open.", null)
                         } else {
                             pendingPickerResult = result
+                            pickerOrderId = call.argument<String>("orderId") ?: ""
                             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                                 addCategory(Intent.CATEGORY_OPENABLE)
                                 type = "video/*"
@@ -91,7 +93,6 @@ class MainActivity : FlutterActivity() {
                 for (i in 0 until clip.itemCount) uris.add(clip.getItemAt(i).uri)
             } ?: data.data?.let { uris.add(it) }
             val existing = readPending()
-            val orderId = data.getStringExtra("unused_order_id")
             val output = mutableListOf<Map<String, Any>>()
             for (uri in uris.distinct()) {
                 try {
@@ -104,13 +105,15 @@ class MainActivity : FlutterActivity() {
                         put("name", meta["name"])
                         put("size", meta["size"])
                         put("mime", meta["mime"])
+                        put("orderId", pickerOrderId)
                     }
                     if (existing.none { it.optString("uri") == uri.toString() }) existing.add(record)
                     output.add(mapOf(
                         "uri" to uri.toString(),
                         "name" to (meta["name"] ?: "video"),
                         "size" to (meta["size"] ?: 0L),
-                        "mime" to (meta["mime"] ?: "video/*")
+                        "mime" to (meta["mime"] ?: "video/*"),
+                        "orderId" to pickerOrderId
                     ))
                 }
             }
