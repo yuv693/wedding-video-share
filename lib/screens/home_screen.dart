@@ -32,6 +32,8 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Map<String, dynamic>> _notifications = [];
   List<PersistentVideo> _pendingUploads = [];
 
+  int get _activeVideoCount => _videos.where((v) => v['upload_status'] != 'deleted' && v['deleted_at'] == null).length;
+
   @override
   void initState() {
     super.initState();
@@ -298,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _chooseAndUpload() async {
-    if (_order?['upload_locked'] == true || _videos.length >= 10) {
+    if (_order?['upload_locked'] == true || _activeVideoCount >= 10) {
       setState(() => _status = 'This wedding has reached its 10-video limit. Create a new account for another wedding.');
       return;
     }
@@ -315,7 +317,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (_order == null) throw Exception('Your wedding upload could not be prepared. Please refresh and try again.');
       final picked = await PersistentVideo.pick(_order!['id'].toString());
       if (picked.isEmpty) return;
-      if (_videos.length + picked.where((p) => !_videos.any((v) =>
+      if (_activeVideoCount + picked.where((p) => !_videos.any((v) =>
           v['original_filename'] == p.name &&
           (v['file_size_bytes'] as num?)?.toInt() == p.size &&
           v['upload_status'] == 'uploaded')).length > 10) {
@@ -706,12 +708,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     ),
-                  if (!locked && _videos.length < 10)
+                  if (!locked && _activeVideoCount < 10)
                     FilledButton.icon(
                       onPressed: _busy || _uploading || _driveEmail == null ? null : _chooseAndUpload,
                       style: FilledButton.styleFrom(backgroundColor: burgundy),
                       icon: const Icon(Icons.video_file),
-                      label: Text(_videos.isEmpty ? 'Choose up to 10 wedding videos' : 'Add more videos (${10 - _videos.length} slots left)'),
+                      label: Text(_videos.isEmpty ? 'Choose up to 10 wedding videos' : 'Add more videos (${10 - _activeVideoCount} slots left)'),
                     )
                   else
                     const Text('This wedding has reached its 10-video limit or is locked.'),
