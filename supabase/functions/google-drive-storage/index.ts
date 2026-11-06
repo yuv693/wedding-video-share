@@ -104,7 +104,7 @@ function parseError(e: unknown) {
     "GOOGLE_DRIVE_FOLDER_SAVE_FAILED", "ORDER_NOT_FOUND", "PAYMENT_REQUIRED",
     "UPLOAD_LOCKED", "VIDEO_ALREADY_EXISTS", "VIDEO_LOOKUP_FAILED", "FILE_SIZE_INVALID", "INSUFFICIENT_DRIVE_SPACE",
     "DRIVE_QUOTA_UNAVAILABLE", "UPLOAD_SESSION_CREATE_FAILED", "UPLOAD_SESSION_SAVE_FAILED",
-    "UPLOAD_SESSION_NOT_FOUND", "UPLOAD_SESSION_LOOKUP_FAILED", "DRIVE_FILE_NOT_VERIFIED", "VIDEO_RECORD_SAVE_FAILED",
+    "UPLOAD_SESSION_NOT_FOUND", "UPLOAD_SESSION_LOOKUP_FAILED", "DRIVE_FILE_NOT_VERIFIED", "VIDEO_RECORD_SAVE_FAILED", "VIDEO_LIMIT_REACHED",
     "VIDEO_NOT_FOUND", "GOOGLE_DRIVE_DELETE_FAILED", "ACTION_NOT_SUPPORTED"
   ]);
   return known.has(msg) ? msg : "INTERNAL_ERROR";
@@ -172,6 +172,10 @@ Deno.serve((req) => {
         const { data: order, error: orderError } = await admin.from("wedding_orders").select("id,customer_id,payment_status,upload_locked").eq("id", orderId).eq("customer_id", customerId).maybeSingle();
         if (orderError || !order) throw new Error("ORDER_NOT_FOUND");
         if (order.upload_locked) throw new Error("UPLOAD_LOCKED");
+        const { count: videoCount, error: countError } = await admin.from("wedding_videos")
+          .select("id", { count: "exact", head: true }).eq("order_id", orderId);
+        if (countError) throw new Error("VIDEO_LOOKUP_FAILED");
+        if ((videoCount ?? 0) >= 10) throw new Error("VIDEO_LIMIT_REACHED");
         // Multiple videos are allowed in one wedding order; uploads are serialized by the app.
         const quotaRes = await driveRequest("https://www.googleapis.com/drive/v3/about?fields=storageQuota(limit,usage)", accessToken);
         const quota = await quotaRes.json();
