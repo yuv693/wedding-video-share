@@ -32,7 +32,7 @@ jobs:
           from pathlib import Path
           p = Path("admin_app/android/app/src/main/AndroidManifest.xml")
           s = p.read_text()
-          permission = '    <uses-permission android:name="android.permission.INTERNET" />\\n'
+          permission = '    <uses-permission android:name="android.permission.INTERNET" />\n'
           if 'android.permission.INTERNET' not in s:
               s = s.replace('<application', permission + '    <application', 1)
               p.write_text(s)
@@ -41,8 +41,20 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
+          import xml.etree.ElementTree as ET
+
           p = Path("admin_app/android/app/src/main/AndroidManifest.xml")
           s = p.read_text()
+
+          # Android must deliver the Supabase callback to this Flutter activity.
+          activity = re.search(r"<activity\\b[^>]*>", s)
+          if not activity:
+              raise SystemExit("MainActivity <activity> tag not found")
+          tag = activity.group(0)
+          if "android:launchMode=" not in tag:
+              s = s[:activity.start()] + tag[:-1] + ' android:launchMode="singleTop">' + s[activity.end():]
+
           intent = '''
                   <intent-filter>
                       <action android:name="android.intent.action.VIEW" />
@@ -52,8 +64,11 @@ jobs:
                   </intent-filter>
           '''
           if 'android:scheme="weddingvideoshareadmin"' not in s:
-              s = s.replace("</activity>", intent + "\\n        </activity>")
-              p.write_text(s)
+              s = s.replace("</activity>", intent + "\\n        </activity>", 1)
+
+          p.write_text(s)
+          ET.parse(p)
+          print("AndroidManifest.xml valid; admin deep-link intent filter configured.")
           PY
       - name: Remove generated placeholder test
         run: rm -f admin_app/test/widget_test.dart
