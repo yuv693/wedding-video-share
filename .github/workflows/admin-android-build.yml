@@ -26,6 +26,17 @@ jobs:
           if [ ! -f admin_app/android/gradlew ]; then
             flutter create --platforms=android --org com.weddingvideoshare --project-name wedding_video_share_admin admin_app
           fi
+      - name: Add Android internet permission for release builds
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("admin_app/android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          permission = '    <uses-permission android:name="android.permission.INTERNET" />\\n'
+          if 'android.permission.INTERNET' not in s:
+              s = s.replace('<application', permission + '    <application', 1)
+              p.write_text(s)
+          PY
       - name: Configure admin sign-in deep link
         run: |
           python3 - <<'PY'
