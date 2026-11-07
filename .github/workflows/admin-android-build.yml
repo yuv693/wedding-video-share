@@ -48,7 +48,7 @@ jobs:
           s = p.read_text()
 
           # Android must deliver the Supabase callback to this Flutter activity.
-          activity = re.search(r"<activity\\b[^>]*>", s)
+          activity = re.search(r"<activity\b[^>]*>", s)
           if not activity:
               raise SystemExit("MainActivity <activity> tag not found")
           tag = activity.group(0)
@@ -64,7 +64,7 @@ jobs:
                   </intent-filter>
           '''
           if 'android:scheme="weddingvideoshareadmin"' not in s:
-              s = s.replace("</activity>", intent + "\\n        </activity>", 1)
+              s = s.replace("</activity>", intent + "\n        </activity>", 1)
 
           p.write_text(s)
           ET.parse(p)
