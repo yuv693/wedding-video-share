@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -29,19 +31,41 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   bool sent = false, busy = false;
-  final token = TextEditingController();
+  bool signedIn = Supabase.instance.client.auth.currentSession != null;
   String? status;
+  StreamSubscription<AuthState>? authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((state) {
+      if (!mounted) return;
+      setState(() {
+        signedIn = state.session != null;
+        if (signedIn) status = null;
+      });
+    }, onError: (Object error) {
+      if (mounted) setState(() => status = 'Sign-in callback failed: $error');
+    });
+  }
+
+  @override
+  void dispose() {
+    authSubscription?.cancel();
+    super.dispose();
+  }
   Future<void> send() async {
     setState(() { busy = true; status = null; });
     try {
       await Supabase.instance.client.auth.signInWithOtp(email: endpointEmail, shouldCreateUser: false, emailRedirectTo: 'weddingvideoshareadmin://login-callback/');
-      setState(() { sent = true; status = 'Check the owner email for the login link.'; });
-    } catch (e) { setState(() => status = e.toString()); }
-    finally { setState(() => busy = false); }
+      if (!mounted) return;
+      setState(() { sent = true; status = 'Check the owner email and open the sign-in link on this phone.'; });
+    } catch (e) { if (mounted) setState(() => status = e.toString()); }
+    finally { if (mounted) setState(() => busy = false); }
   }
   @override
   Widget build(BuildContext context) {
-    if (Supabase.instance.client.auth.currentSession != null) return const ConsolePage();
+    if (signedIn || Supabase.instance.client.auth.currentSession != null) return const ConsolePage();
     return Scaffold(appBar: AppBar(title: const Text('Owner Console')), body: Padding(
       padding: const EdgeInsets.all(24), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         const Icon(Icons.lock_outline, size: 52),
