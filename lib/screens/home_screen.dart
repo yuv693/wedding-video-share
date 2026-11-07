@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
@@ -570,6 +571,22 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) setState(() => _status = 'Private link copied. Send the password separately.');
   }
 
+  Future<void> _shareGuestLink() async {
+    if (_shareUrl == null) return;
+    await Share.share(
+      'Here is your private wedding video link:\n${_shareUrl!}\n\nPlease ask me for the 6-digit download password separately.',
+      subject: 'Wedding video link',
+    );
+  }
+
+  Future<void> _shareDownloadPin() async {
+    if (_sharePin == null) return;
+    await Share.share(
+      'Wedding video download password: ${_sharePin!}',
+      subject: 'Wedding video password',
+    );
+  }
+
   String _bytes(dynamic value) {
     final n = value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
     if (n >= 1024 * 1024 * 1024) return '${(n / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
@@ -789,10 +806,23 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                       const SizedBox(height: 8),
                       FilledButton.icon(
+                        onPressed: _shareGuestLink,
+                        icon: const Icon(Icons.share_rounded),
+                        label: const Text('Share guest link (WhatsApp / more)'),
+                        style: FilledButton.styleFrom(backgroundColor: burgundy),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_sharePin != null)
+                        OutlinedButton.icon(
+                          onPressed: _shareDownloadPin,
+                          icon: const Icon(Icons.password_rounded),
+                          label: const Text('Share password separately'),
+                        ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
                         onPressed: _copyShareLink,
                         icon: const Icon(Icons.copy),
                         label: const Text('Copy guest link'),
-                        style: FilledButton.styleFrom(backgroundColor: burgundy),
                       ),
                     ],
                     const SizedBox(height: 14),
