@@ -460,10 +460,21 @@ class _HomeScreenState extends State<HomeScreen> {
       }
       if (mounted) setState(() { _shareUrl = url; _sharePin = data['downloadPin']?.toString(); _status = 'Private link and 6-digit download password are ready. Send them separately.'; });
     } catch (e) {
-      if (mounted) setState(() => _status = 'Share link: $e');
+      final message = e.toString().toLowerCase();
+      if (mounted) setState(() => _status = message.contains('timed out') || message.contains('socketexception')
+        ? 'Internet connection timed out while creating the link. Check your internet and tap Create / refresh private link to retry.'
+        : 'Share link could not be created: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _createAndShareGuestLink() async {
+    if (_shareUrl == null) {
+      await _makeShareLink();
+    }
+    if (!mounted || _shareUrl == null) return;
+    await _shareGuestLink();
   }
 
   Future<void> _deleteSingleDriveVideo(Map<String, dynamic> video) async {
@@ -792,6 +803,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         icon: const Icon(Icons.link),
                         label: const Text('Create / refresh private link'),
                       ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _createAndShareGuestLink,
+                        icon: const Icon(Icons.share_rounded),
+                        label: const Text('Share link on WhatsApp / other apps'),
+                        style: FilledButton.styleFrom(backgroundColor: burgundy),
+                      ),
+                    ),
+                    const Text(
+                      'If a link has not been created in this app session, this button will create a fresh private link first, then open the Android share menu.',
+                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                    ),
                     if (_shareUrl != null) ...[
                       const SizedBox(height: 8),
                       const Text('Private receiver link', style: TextStyle(fontWeight: FontWeight.w700)),
