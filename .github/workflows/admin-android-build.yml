@@ -26,6 +26,24 @@ jobs:
           if [ ! -f admin_app/android/gradlew ]; then
             flutter create --platforms=android --org com.weddingvideoshare --project-name wedding_video_share_admin admin_app
           fi
+      - name: Configure admin sign-in deep link
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("admin_app/android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          intent = '''
+                  <intent-filter>
+                      <action android:name="android.intent.action.VIEW" />
+                      <category android:name="android.intent.category.DEFAULT" />
+                      <category android:name="android.intent.category.BROWSABLE" />
+                      <data android:scheme="weddingvideoshareadmin" android:host="login-callback" />
+                  </intent-filter>
+          '''
+          if 'android:scheme="weddingvideoshareadmin"' not in s:
+              s = s.replace("</activity>", intent + "\\n        </activity>")
+              p.write_text(s)
+          PY
       - name: Build Admin APK
         working-directory: admin_app
         run: |
