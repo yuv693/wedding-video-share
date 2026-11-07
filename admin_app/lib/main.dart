@@ -34,7 +34,7 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> send() async {
     setState(() { busy = true; status = null; });
     try {
-      await Supabase.instance.client.auth.signInWithOtp(email: endpointEmail, shouldCreateUser: false);
+      await Supabase.instance.client.auth.signInWithOtp(email: endpointEmail, shouldCreateUser: false, emailRedirectTo: 'weddingvideoshareadmin://login-callback/');
       setState(() { sent = true; status = 'Check the owner email for the login link.'; });
     } catch (e) { setState(() => status = e.toString()); }
     finally { setState(() => busy = false); }
