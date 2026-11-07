@@ -1,0 +1,40 @@
+name: Admin Android APK
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'admin_app/**'
+      - '.github/workflows/admin-android-build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-admin-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Create Android platform
+        run: |
+          if [ ! -f admin_app/android/gradlew ]; then
+            flutter create --platforms=android --org com.weddingvideoshare --project-name wedding_video_share_admin admin_app
+          fi
+      - name: Build Admin APK
+        working-directory: admin_app
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test
+          flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wedding-video-share-admin-apk
+          path: admin_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
