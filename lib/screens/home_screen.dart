@@ -807,9 +807,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 8),
                       FilledButton.icon(
                         onPressed: _shareGuestLink,
-                        icon: const Icon(Icons.share_rounded),
-                        label: const Text('Share guest link (WhatsApp / more)'),
+                        icon: const Icon(Icons.chat_rounded),
+                        label: const Text('Share on WhatsApp / other apps'),
                         style: FilledButton.styleFrom(backgroundColor: burgundy),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Choose WhatsApp, Gmail, Messages or any sharing app from the Android share menu. Send the 6-digit password separately.',
+                        style: TextStyle(color: Colors.black54, fontSize: 12),
                       ),
                       const SizedBox(height: 8),
                       if (_sharePin != null)
