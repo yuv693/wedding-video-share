@@ -76,6 +76,32 @@ class _ConsolePageState extends State<ConsolePage> {
   }
   @override
   void initState() { super.initState(); load(); }
+  Future<void> decide(dynamic item, String action) async {
+    if (action == 'approve') {
+      final yes = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+        title: const Text('Confirm approval'),
+        content: const Text('Only continue after checking the customer payment in your UPI app.'),
+        actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('YES'))],
+      ));
+      if (yes != true) return;
+    }
+    try {
+      final r = await Supabase.instance.client.functions.invoke('manual-payment-admin', body: {'action': action, 'payment_id': item['id']});
+      final d = r.data as Map;
+      if (r.status != 200 || d['error'] != null) throw Exception(d['error'] ?? 'Request failed');
+      if (action == 'approve' && d['shareUrl'] != null) {
+        final shareUrl = d['shareUrl'].toString();
+        final pin = d['downloadPin'].toString();
+        await showDialog<void>(context: context, builder: (c) => AlertDialog(
+          title: const Text('Video link ready'),
+          content: SelectableText('Link:\n' + shareUrl + '\n\nPIN: ' + pin + '\n\nThis link and PIN are now in the customer app.'),
+          actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))],
+        ));
+      }
+      await load();
+    } catch (e) { setState(() => status = e.toString()); }
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Owner Console'), actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh)), IconButton(onPressed: () => Supabase.instance.client.auth.signOut(), icon: const Icon(Icons.logout))]),
@@ -83,7 +109,7 @@ class _ConsolePageState extends State<ConsolePage> {
       if (status.isNotEmpty) Text(status),
       if (busy) const Center(child: CircularProgressIndicator()),
       if (!busy && items.isEmpty) const Text('No new requests.'),
-      for (final item in items) Card(child: ListTile(title: Text('₹' + (((item['amount_paise'] as num?)?.toInt() ?? 0) ~/ 100).toString()), subtitle: Text(item['customer_email']?.toString() ?? 'Customer'), trailing: const Icon(Icons.chevron_right))),
+      for (final item in items) Card(child: ListTile(title: Text('₹' + (((item['amount_paise'] as num?)?.toInt() ?? 0) ~/ 100).toString()), subtitle: Text(item['customer_email']?.toString() ?? 'Customer'), trailing: Wrap(children: [IconButton(onPressed: busy ? null : () => decide(item, 'approve'), icon: const Icon(Icons.check_circle, color: Colors.green)), IconButton(onPressed: busy ? null : () => decide(item, 'reject'), icon: const Icon(Icons.cancel_outlined, color: Colors.red))]))),
     ])),
   );
 }
