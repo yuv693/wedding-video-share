@@ -913,14 +913,16 @@ class _HomeScreenState extends State<HomeScreen> {
                             leading: Icon(
                               notification['notification_type'] == 'receiver_download_completed'
                                   ? Icons.check_circle_rounded
-                                  : Icons.notifications_none_rounded,
+                                  : notification['notification_type'] == 'share_ready'
+                                      ? Icons.link_rounded
+                                      : Icons.notifications_none_rounded,
                               color: notification['notification_type'] == 'receiver_download_completed'
                                   ? Colors.green
                                   : burgundy,
                             ),
                             title: Text(notification['title']?.toString() ?? 'Account update',
                                 style: const TextStyle(fontWeight: FontWeight.w700)),
-                            subtitle: Text(notification['message']?.toString() ?? ''),
+                            subtitle: SelectableText(notification['message']?.toString() ?? ''),
                             trailing: Text(
                               _notificationDate(notification['created_at']),
                               style: const TextStyle(fontSize: 10, color: Colors.black54),
