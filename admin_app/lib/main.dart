@@ -1,0 +1,89 @@
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+const endpointEmail = 'ym6250067@gmail.com';
+const projectUrl = 'https://mnaswhizatnwfwmjmtvm.supabase.co';
+const publicKey = 'sb_publishable_BwuKkASTfQuapaf1vnIAig_6sR9AGpW';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(url: projectUrl, publishableKey: publicKey);
+  runApp(const OwnerConsole());
+}
+
+class OwnerConsole extends StatelessWidget {
+  const OwnerConsole({super.key});
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Owner Console',
+    theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF6F2438))),
+    home: const LoginPage(),
+  );
+}
+
+class LoginPage extends StatefulWidget {
+  const LoginPage({super.key});
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
+  bool sent = false, busy = false;
+  final token = TextEditingController();
+  String? status;
+  Future<void> send() async {
+    setState(() { busy = true; status = null; });
+    try {
+      await Supabase.instance.client.auth.signInWithOtp(email: endpointEmail, shouldCreateUser: false);
+      setState(() { sent = true; status = 'Check the owner email for the login link.'; });
+    } catch (e) { setState(() => status = e.toString()); }
+    finally { setState(() => busy = false); }
+  }
+  @override
+  Widget build(BuildContext context) {
+    if (Supabase.instance.client.auth.currentSession != null) return const ConsolePage();
+    return Scaffold(appBar: AppBar(title: const Text('Owner Console')), body: Padding(
+      padding: const EdgeInsets.all(24), child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Icon(Icons.lock_outline, size: 52),
+        const Text('Private owner access'),
+        const SizedBox(height: 16),
+        Text(endpointEmail),
+        FilledButton(onPressed: busy ? null : send, child: Text(busy ? 'Please wait' : 'Send sign-in link')),
+        if (status != null) Text(status!),
+      ]),
+    ));
+  }
+}
+
+class ConsolePage extends StatefulWidget {
+  const ConsolePage({super.key});
+  @override
+  State<ConsolePage> createState() => _ConsolePageState();
+}
+class _ConsolePageState extends State<ConsolePage> {
+  bool busy = false;
+  List<dynamic> items = [];
+  String status = '';
+  Future<void> load() async {
+    setState(() => busy = true);
+    try {
+      final r = await Supabase.instance.client.functions.invoke('manual-payment-admin', body: {'action': 'list'});
+      final d = r.data as Map;
+      if (r.status != 200 || d['error'] != null) throw Exception(d['error'] ?? 'Unable to load');
+      setState(() { items = d['payments'] as List? ?? []; status = ''; });
+    } catch (e) { setState(() => status = e.toString()); }
+    finally { setState(() => busy = false); }
+  }
+  @override
+  void initState() { super.initState(); load(); }
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Owner Console'), actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh)), IconButton(onPressed: () => Supabase.instance.client.auth.signOut(), icon: const Icon(Icons.logout))]),
+    body: RefreshIndicator(onRefresh: load, child: ListView(padding: const EdgeInsets.all(16), children: [
+      if (status.isNotEmpty) Text(status),
+      if (busy) const Center(child: CircularProgressIndicator()),
+      if (!busy && items.isEmpty) const Text('No new requests.'),
+      for (final item in items) Card(child: ListTile(title: Text('₹' + (((item['amount_paise'] as num?)?.toInt() ?? 0) ~/ 100).toString()), subtitle: Text(item['customer_email']?.toString() ?? 'Customer'), trailing: const Icon(Icons.chevron_right))),
+    ])),
+  );
+}
