@@ -2,15 +2,89 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const endpointEmail = 'ym6250067@gmail.com';
 const projectUrl = 'https://mnaswhizatnwfwmjmtvm.supabase.co';
 const publicKey = 'sb_publishable_BwuKkASTfQuapaf1vnIAig_6sR9AGpW';
 
+final FlutterLocalNotificationsPlugin localNotifications = FlutterLocalNotificationsPlugin();
+const AndroidNotificationChannel paymentChannel = AndroidNotificationChannel(
+  'payment_requests',
+  'Payment Requests',
+  description: 'Alerts when a customer submits a wedding video payment request.',
+  importance: Importance.max,
+  playSound: true,
+);
+
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+}
+
+Future<void> initializePushNotifications() async {
+  await localNotifications.initialize(
+    const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
+  );
+  await localNotifications
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(paymentChannel);
+  final messaging = FirebaseMessaging.instance;
+  await messaging.requestPermission(alert: true, badge: true, sound: true);
+  FirebaseMessaging.onMessage.listen((message) async {
+    final notification = message.notification;
+    await localNotifications.show(
+      message.hashCode,
+      notification?.title ?? 'New payment request',
+      notification?.body ?? 'A customer has submitted a payment request.',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          paymentChannel.id,
+          paymentChannel.name,
+          channelDescription: paymentChannel.description,
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+        ),
+      ),
+    );
+  });
+}
+
+Future<void> registerAdminPushToken() async {
+  final user = Supabase.instance.client.auth.currentUser;
+  if (user == null || user.email?.toLowerCase() != endpointEmail) return;
+  try {
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token == null || token.isEmpty) return;
+    await Supabase.instance.client.from('admin_fcm_tokens').upsert({
+      'user_id': user.id,
+      'fcm_token': token,
+      'platform': 'android',
+      'updated_at': DateTime.now().toIso8601String(),
+    }, onConflict: 'fcm_token');
+  } catch (error) {
+    debugPrint('Admin FCM token registration failed: $error');
+  }
+}
+
+StreamSubscription<String>? adminTokenRefreshSubscription;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  await initializePushNotifications();
   await Supabase.initialize(url: projectUrl, publishableKey: publicKey);
+  if (Supabase.instance.client.auth.currentSession != null) {
+    await registerAdminPushToken();
+  }
+  adminTokenRefreshSubscription ??= FirebaseMessaging.instance.onTokenRefresh.listen((_) {
+    unawaited(registerAdminPushToken());
+  });
   runApp(const OwnerConsole());
 }
 
@@ -45,6 +119,7 @@ class _LoginPageState extends State<LoginPage> {
         signedIn = state.session != null;
         if (signedIn) status = null;
       });
+      if (state.session != null) unawaited(registerAdminPushToken());
     }, onError: (Object error) {
       if (mounted) setState(() => status = 'Sign-in callback failed: $error');
     });
