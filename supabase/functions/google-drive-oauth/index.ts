@@ -170,6 +170,36 @@ Deno.serve(async (req) => {
   const handler = withSupabase({ auth: "user" }, async (request, ctx) => {
     let body: Record<string, unknown>;
     try { body = await request.json(); } catch { return json({ error: "INVALID_JSON" }, 400); }
+    const customerId = ctx.userClaims?.id;
+    if (typeof customerId !== "string" || !customerId) return json({ error: "AUTH_USER_ID_MISSING" }, 401);
+
+    if (body.action === "transfer_prepare") {
+      const transferToken = randomHex(32);
+      const { error } = await adminClient().rpc("gdrive_connection_transfer_create", {
+        p_source_customer_id: customerId,
+        p_token_hash: await sha256(transferToken),
+      });
+      if (error) {
+        console.error("GDRIVE_TRANSFER_PREPARE_FAILED", error.code ?? "unknown");
+        return json({ error: "DRIVE_TRANSFER_PREPARE_FAILED" }, 409);
+      }
+      return json({ ok: true, transferToken, expiresInSeconds: 600 });
+    }
+
+    if (body.action === "transfer_claim") {
+      const transferToken = typeof body.transferToken === "string" ? body.transferToken : "";
+      if (!/^[a-f0-9]{64}$/.test(transferToken)) return json({ error: "INVALID_TRANSFER_TOKEN" }, 400);
+      const { error } = await adminClient().rpc("gdrive_connection_transfer_claim", {
+        p_token_hash: await sha256(transferToken),
+        p_target_customer_id: customerId,
+      });
+      if (error) {
+        console.error("GDRIVE_TRANSFER_CLAIM_FAILED", error.code ?? "unknown");
+        return json({ error: "DRIVE_TRANSFER_CLAIM_FAILED" }, 409);
+      }
+      return json({ ok: true });
+    }
+
     if (body.action !== "start") return json({ error: "UNKNOWN_ACTION" }, 400);
     return startOAuth(request, ctx);
   });
