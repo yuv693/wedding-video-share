@@ -84,22 +84,72 @@ class ConsolePage extends StatefulWidget {
   @override
   State<ConsolePage> createState() => _ConsolePageState();
 }
-class _ConsolePageState extends State<ConsolePage> {
+class _ConsolePageState extends State<ConsolePage> with WidgetsBindingObserver {
   bool busy = false;
   List<dynamic> items = [];
   String status = '';
-  Future<void> load() async {
-    setState(() => busy = true);
+  Timer? _requestPollTimer;
+  bool _loadingRequests = false;
+  bool _hasInitialRequestSnapshot = false;
+  final Set<String> _knownPaymentIds = <String>{};
+
+  Future<void> load({bool quiet = false}) async {
+    if (_loadingRequests) return;
+    _loadingRequests = true;
+    if (!quiet && mounted) setState(() => busy = true);
     try {
       final r = await Supabase.instance.client.functions.invoke('manual-payment-admin', body: {'action': 'list'});
       final d = r.data as Map;
       if (r.status != 200 || d['error'] != null) throw Exception(d['error'] ?? 'Unable to load');
-      setState(() { items = d['payments'] as List? ?? []; status = ''; });
-    } catch (e) { setState(() => status = e.toString()); }
-    finally { setState(() => busy = false); }
+      final latest = (d['payments'] as List? ?? []).toList();
+      final latestIds = latest.map((item) => item['id']?.toString() ?? '').where((id) => id.isNotEmpty).toSet();
+      final newIds = _hasInitialRequestSnapshot ? latestIds.difference(_knownPaymentIds) : <String>{};
+      _knownPaymentIds
+        ..clear()
+        ..addAll(latestIds);
+      _hasInitialRequestSnapshot = true;
+      if (!mounted) return;
+      setState(() { items = latest; status = ''; });
+      if (newIds.isNotEmpty) {
+        unawaited(SystemSound.play(SystemSoundType.alert));
+        unawaited(HapticFeedback.vibrate());
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('${newIds.length} new payment request${newIds.length == 1 ? '' : 's'} received'), duration: const Duration(seconds: 6)),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted && !quiet) setState(() => status = e.toString());
+    } finally {
+      _loadingRequests = false;
+      if (mounted && !quiet) setState(() => busy = false);
+    }
   }
+
   @override
-  void initState() { super.initState(); load(); }
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    load();
+    _requestPollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        load(quiet: true);
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) load(quiet: true);
+  }
+
+  @override
+  void dispose() {
+    _requestPollTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
   Future<void> decide(dynamic item, String action) async {
     if (action == 'approve') {
       final yes = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
