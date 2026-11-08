@@ -100,9 +100,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (confirmed != true || !mounted) return;
     setState(() { _busy = true; _status = null; });
     try {
+      final sourceSession = supabase.auth.currentSession;
+      if (sourceSession == null || sourceSession.accessToken.isEmpty) {
+        throw Exception('Your customer session has expired. Please close and reopen the app, then try again.');
+      }
       final prepared = await supabase.functions.invoke(
         'google-drive-oauth',
         body: {'action': 'transfer_prepare'},
+        headers: {'Authorization': 'Bearer ${sourceSession.accessToken}'},
       );
       final preparedData = _map(prepared.data);
       final transferToken = preparedData['transferToken']?.toString();
@@ -121,12 +126,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         throw Exception('A new customer account could not be created.');
       }
 
+      final targetSession = supabase.auth.currentSession;
+      if (targetSession == null || targetSession.accessToken.isEmpty) {
+        throw Exception('The new customer session could not be authenticated. Please reopen the app and try again.');
+      }
       final claimed = await supabase.functions.invoke(
         'google-drive-oauth',
         body: {
           'action': 'transfer_claim',
           'transferToken': transferToken,
         },
+        headers: {'Authorization': 'Bearer ${targetSession.accessToken}'},
       );
       final claimedData = _map(claimed.data);
       if (claimed.status != 200 || claimedData['ok'] != true) {
