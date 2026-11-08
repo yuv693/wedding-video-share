@@ -75,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Start another wedding?'),
-        content: const Text('This creates a separate customer account for a new wedding. The new account needs its own ₹290 payment. Recovery email is optional. Your completed wedding remains saved in the previous account.'),
+        content: const Text('This creates a separate customer account for a new wedding. The new account needs its own ₹290 payment. Your completed wedding remains saved in the previous account. Your saved Google Drive connection will be reused.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Create new account')),
@@ -83,17 +83,63 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    setState(() { _busy = true; _status = null; });
     try {
-      // Prepare a short-lived, one-time server-side handoff before changing
-      // anonymous auth users. The refresh token itself never enters the app.
       final prepared = await supabase.functions.invoke(
         'google-drive-oauth',
         body: {'action': 'transfer_prepare'},
       );
       final preparedData = _map(prepared.data);
       final transferToken = preparedData['transferToken']?.toString();
-      if (prepared.status != 200 || preparedData['ok'] != true ||
-          transferToken == null || !RegExp(r'^[a-f0-9]{64}
+      if (prepared.status != 200 ||
+          preparedData['ok'] != true ||
+          transferToken == null ||
+          !RegExp(r'^[a-f0-9]{64}$').hasMatch(transferToken)) {
+        throw Exception(preparedData['error']?.toString() ??
+            'Could not securely prepare your saved Google Drive connection.');
+      }
+
+      await supabase.auth.signOut();
+      final signedIn = await supabase.auth.signInAnonymously();
+      final targetCustomerId = signedIn.user?.id ?? supabase.auth.currentUser?.id;
+      if (targetCustomerId == null) {
+        throw Exception('A new customer account could not be created.');
+      }
+
+      final claimed = await supabase.functions.invoke(
+        'google-drive-oauth',
+        body: {
+          'action': 'transfer_claim',
+          'transferToken': transferToken,
+        },
+      );
+      final claimedData = _map(claimed.data);
+      if (claimed.status != 200 || claimedData['ok'] != true) {
+        throw Exception(claimedData['error']?.toString() ??
+            'The saved Google Drive connection could not be restored. Please reconnect Google Drive.');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _order = null;
+        _videos = [];
+        _notifications = [];
+        _quota = null;
+        _driveEmail = null;
+        _shareUrl = null;
+        _sharePin = null;
+        _manualPaymentStatus = null;
+        _status = 'New wedding account created. Your saved Google Drive is connected.';
+      });
+      await _refresh();
+      await _loadPendingUploads();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _status = 'Could not start a new wedding: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _refresh() async {
