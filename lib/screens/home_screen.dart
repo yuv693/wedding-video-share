@@ -84,12 +84,975 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (confirmed != true || !mounted) return;
     try {
+      // Prepare a short-lived, one-time server-side handoff before changing
+      // anonymous auth users. The refresh token itself never enters the app.
+      final prepared = await supabase.functions.invoke(
+        'google-drive-oauth',
+        body: {'action': 'transfer_prepare'},
+      );
+      final preparedData = _map(prepared.data);
+      final transferToken = preparedData['transferToken']?.toString();
+      if (prepared.status != 200 || preparedData['ok'] != true ||
+          transferToken == null || !RegExp(r'^[a-f0-9]{64}
+  }
+
+  Future<void> _refresh() async {
+    await _loadOrder();
+    await _loadQuota();
+    await _loadNotifications();
+    await _loadManualPaymentStatus();
+  }
+
+  Future<void> _loadOrder() async {
+    try {
+      final row = await supabase.from('wedding_orders')
+        .select('id,payment_status,upload_locked,workflow_status')
+        .maybeSingle();
+      if (!mounted) return;
+      setState(() => _order = row);
+      if (row != null) {
+        final videos = await supabase.from('wedding_videos')
+          .select('id,original_filename,file_size_bytes,upload_status,google_drive_account_email,deleted_at,auto_delete_consent_at')
+          .eq('order_id', row['id'])
+          .order('created_at', ascending: true);
+        if (mounted) setState(() {
+          _videos = videos.map((v) => _map(v)).toList();
+          final activeVideos = _videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).toList();
+          _autoDeleteConsent = activeVideos.isNotEmpty && activeVideos.every((v) => v['auto_delete_consent_at'] != null);
+        });
+      } else {
+        setState(() { _videos = []; _autoDeleteConsent = false; });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _status = 'Account status could not be loaded. Pull down to refresh.');
+    }
+  }
+
+  Future<void> _loadQuota() async {
+    try {
+      final response = await supabase.functions.invoke('google-drive-storage', body: {'action': 'quota'});
+      final data = _map(response.data);
+      if (!mounted) return;
+      if (response.status == 200 && data['ok'] == true) {
+        setState(() {
+          _quota = data;
+          _driveEmail = data['email']?.toString();
+          if (_status?.startsWith('Google Drive') == true) _status = null;
+        });
+      } else {
+        final reason = data['error']?.toString() ?? 'DRIVE_CONNECTION_CHECK_FAILED';
+        setState(() => _status = 'Google Drive check failed: $reason. Please reconnect Google Drive.');
+      }
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Google Drive check failed. Please reconnect Google Drive.');
+    }
+  }
+
+  Future<void> _loadNotifications() async {
+    try {
+      final rows = await supabase.from('customer_notifications')
+        .select('id,notification_type,title,message,created_at,read_at')
+        .order('created_at', ascending: false)
+        .limit(5);
+      if (!mounted) return;
+      setState(() => _notifications = rows.map((row) => _map(row)).toList());
+    } catch (_) {
+      // Notifications are optional UI; the server remains the source of truth.
+    }
+  }
+
+  Future<void> _connectDrive() async {
+    setState(() { _busy = true; _status = null; });
+    try {
+      final response = await supabase.functions.invoke('google-drive-oauth', body: {'action': 'start'});
+      final data = _map(response.data);
+      final authUrl = data['authorizationUrl']?.toString();
+      if (response.status != 200 || authUrl == null) {
+        throw Exception(data['error']?.toString() ?? 'Google Drive setup is not ready.');
+      }
+      if (!await launchUrl(Uri.parse(authUrl), mode: LaunchMode.externalApplication)) {
+        throw Exception('Could not open Google sign-in.');
+      }
+      if (mounted) setState(() => _status = 'Finish Google permission in the browser, then return to this app.');
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Drive connection: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _loadManualPaymentStatus() async {
+    try {
+      final response = await supabase.functions.invoke('manual-payments', body: {'action': 'status'});
+      final data = _map(response.data);
+      if (response.status == 200 && mounted) {
+        setState(() => _manualPaymentStatus = data['status']?.toString());
+      }
+    } catch (_) {
+      // Payment status remains protected by the server; refresh can retry.
+    }
+  }
+
+  Future<void> _startPayment() async {
+    if (!_videos.any((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null) || _order == null) {
+      setState(() => _status = 'Upload your wedding video first. Payment is needed when you share it.');
+      return;
+    }
+    if (_manualPaymentStatus == 'pending') {
+      setState(() => _status = 'Your payment request is already submitted. Please wait for manual verification.');
+      return;
+    }
+
+    const upiId = 'paytm.s4ow732@pty';
+    const payeeName = 'Kausharbanu Yunus Malek';
+    final upiUri = Uri(
+      scheme: 'upi',
+      host: 'pay',
+      queryParameters: {
+        'pa': upiId,
+        'pn': payeeName,
+        'am': '290.00',
+        'cu': 'INR',
+        'tn': 'Wedding Video Share',
+      },
+    );
+    final confirmedPaid = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Pay ₹290 by UPI'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Scan this QR with any UPI app and pay exactly ₹290.'),
+              const SizedBox(height: 12),
+              QrImageView(data: upiUri.toString(), size: 220),
+              const SizedBox(height: 8),
+              const Text('Kausharbanu Yunus Malek', style: TextStyle(fontWeight: FontWeight.w700)),
+              SelectableText(upiId),
+              TextButton.icon(
+                onPressed: () => Clipboard.setData(const ClipboardData(text: upiId)),
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy UPI ID'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final launched = await launchUrl(upiUri, mode: LaunchMode.externalApplication);
+                  if (!launched && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('No UPI app could open the payment link. Scan the QR instead.')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.account_balance_wallet_outlined),
+                label: const Text('Open UPI app'),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'After you pay, tap “I have paid”. Your request will remain pending until the owner checks the payment in Paytm.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('I have paid'),
+          ),
+        ],
+      ),
+    );
+    if (confirmedPaid != true || !mounted) return;
+
+    setState(() { _busy = true; _status = null; });
+    try {
+      final response = await supabase.functions.invoke('manual-payments', body: {
+        'action': 'submit',
+      });
+      final data = _map(response.data);
+      if (response.status != 200 || data['ok'] != true) {
+        throw Exception(data['note']?.toString() ?? data['error']?.toString() ?? 'Could not submit payment request.');
+      }
+      if (mounted) {
+        setState(() {
+          _manualPaymentStatus = data['status']?.toString() ?? 'pending';
+          _status = 'Payment request submitted. Sharing will unlock only after the owner verifies the ₹290 payment.';
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Payment request: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _loadPendingUploads() async {
+    try {
+      final items = await PersistentVideo.pending();
+      if (mounted) setState(() => _pendingUploads = items);
+    } catch (_) {
+      // Persistent picker is available on supported Android builds.
+    }
+  }
+
+  Future<void> _chooseAndUpload() async {
+    if (_order?['upload_locked'] == true || _activeVideoCount >= 10) {
+      setState(() => _status = 'This wedding has reached its 10-video limit. Create a new account for another wedding.');
+      return;
+    }
+    setState(() { _busy = true; _status = null; _uploadProgress = 0; });
+    try {
+      if (_order == null) {
+        final prepared = await supabase.functions.invoke('manual-payments', body: {'action': 'prepare_upload'});
+        final preparedData = _map(prepared.data);
+        if (prepared.status != 200 || preparedData['ok'] != true) {
+          throw Exception(preparedData['note']?.toString() ?? preparedData['error']?.toString() ?? 'Could not prepare your upload.');
+        }
+        await _loadOrder();
+      }
+      if (_order == null) throw Exception('Your wedding upload could not be prepared. Please refresh and try again.');
+      final picked = await PersistentVideo.pick(_order!['id'].toString());
+      if (picked.isEmpty) return;
+      if (_activeVideoCount + picked.where((p) => !_videos.any((v) =>
+          v['original_filename'] == p.name &&
+          (v['file_size_bytes'] as num?)?.toInt() == p.size &&
+          v['upload_status'] == 'uploaded')).length > 10) {
+        throw Exception('You can upload up to 10 videos in one wedding. Select fewer new videos.');
+      }
+      await _loadPendingUploads();
+      await _uploadPendingVideos(picked);
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Upload: $e');
+    } finally {
+      if (mounted) setState(() { _busy = false; _uploading = false; });
+    }
+  }
+
+  Future<void> _resumePendingUploads() async {
+    if (_order == null) {
+      await _loadOrder();
+    }
+    final orderId = _order?['id']?.toString();
+    if (orderId == null) {
+      setState(() => _status = 'Please refresh your wedding account before resuming.');
+      return;
+    }
+    final items = _pendingUploads.where((item) => item.orderId == orderId).toList();
+    if (items.isEmpty) {
+      setState(() => _status = 'No saved uploads for this wedding account.');
+      return;
+    }
+    setState(() { _busy = true; _status = null; });
+    try {
+      await _uploadPendingVideos(items);
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Resume upload: $e');
+    } finally {
+      if (mounted) setState(() { _busy = false; _uploading = false; });
+    }
+  }
+
+  Future<void> _uploadPendingVideos(List<PersistentVideo> items) async {
+    if (_order == null) throw Exception('Wedding account is not ready.');
+    final pending = items.where((item) => !_videos.any((v) =>
+      v['original_filename'] == item.name &&
+      (v['file_size_bytes'] as num?)?.toInt() == item.size &&
+      v['upload_status'] == 'uploaded')).toList();
+    if (pending.isEmpty) {
+      setState(() => _status = 'These videos are already uploaded.');
+      return;
+    }
+    setState(() { _uploading = true; _busy = false; _pauseRequested = false; });
+    var completed = 0;
+    for (final item in pending) {
+      if (!mounted) return;
+      setState(() {
+        _currentUploadName = item.name;
+        _status = 'Uploading video ${completed + 1} of ${pending.length}: ${item.name}';
+        _uploadProgress = completed / pending.length;
+      });
+      try {
+        await _uploadService.upload(
+          orderId: _order!['id'].toString(),
+          file: item.toPlatformFile(),
+          streamFromOffset: item.streamFrom,
+          shouldPause: () => _pauseRequested,
+          onProgress: (value) {
+            if (mounted) setState(() => _uploadProgress = (completed + value) / pending.length);
+          },
+        );
+      } on UploadPausedException {
+        if (mounted) setState(() {
+          _status = 'Upload paused safely. Tap Resume Upload to continue from the saved Google Drive checkpoint.';
+          _uploading = false;
+          _currentUploadName = null;
+        });
+        return;
+      }
+      await PersistentVideo.remove(item.uri);
+      completed++;
+      if (mounted) {
+        setState(() {
+          _pendingUploads.removeWhere((p) => p.uri == item.uri);
+          _uploadProgress = completed / pending.length;
+        });
+      }
+      await _loadOrder();
+    }
+    if (!mounted) return;
+    setState(() {
+      _shareUrl = null;
+      _sharePin = null;
+      _status = '${completed} video(s) uploaded successfully. You can share all videos using one private link.';
+      _uploading = false;
+      _currentUploadName = null;
+      _uploadProgress = 1;
+    });
+    await _loadOrder();
+  }
+
+  Future<void> _updateAutoDeleteConsent(bool consent) async {
+    final targets = _videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).toList();
+    if (targets.isEmpty) return;
+    final previous = _autoDeleteConsent;
+    setState(() { _autoDeleteConsent = consent; _status = null; });
+    try {
+      for (final video in targets) {
+        final response = await supabase.functions.invoke('google-drive-storage', body: {
+          'action': 'set_auto_delete_consent',
+          'videoId': video['id'],
+          'consent': consent,
+        });
+        final data = _map(response.data);
+        if (response.status != 200 || data['ok'] != true) {
+          throw Exception(data['error']?.toString() ?? 'Could not update automatic deletion consent.');
+        }
+      }
+      if (mounted) setState(() => _status = consent
+        ? 'Automatic Google Drive deletion is enabled for all videos after each receiver download is verified.'
+        : 'Automatic Google Drive deletion consent has been withdrawn. Your Drive copies will be kept.');
+    } catch (e) {
+      if (mounted) setState(() { _autoDeleteConsent = previous; _status = 'Consent update: $e'; });
+    }
+  }
+
+  Future<void> _makeShareLink() async {
+    if (_order == null || !_videos.any((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null)) return;
+    if (_order?['payment_status'] != 'paid') {
+      await _startPayment();
+      return;
+    }
+    setState(() { _busy = true; _status = null; });
+    try {
+      final response = await supabase.functions.invoke('wedding-share', body: {
+        'action': 'create_share',
+        'orderId': _order!['id'],
+      });
+      final data = _map(response.data);
+      final url = data['shareUrl']?.toString();
+      if (response.status != 200 || data['ok'] != true || url == null) {
+        throw Exception(data['error']?.toString() ?? 'Could not create the private link.');
+      }
+      if (mounted) setState(() { _shareUrl = url; _sharePin = data['downloadPin']?.toString(); _status = 'Private link and 6-digit download password are ready. Send them separately.'; });
+    } catch (e) {
+      final message = e.toString().toLowerCase();
+      if (mounted) setState(() => _status = message.contains('timed out') || message.contains('socketexception')
+        ? 'Internet connection timed out while creating the link. Check your internet and tap Create / refresh private link to retry.'
+        : 'Share link could not be created: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _createAndShareGuestLink() async {
+    if (_shareUrl == null) {
+      await _makeShareLink();
+    }
+    if (!mounted || _shareUrl == null) return;
+    await _shareGuestLink();
+  }
+
+  Future<void> _deleteSingleDriveVideo(Map<String, dynamic> video) async {
+    final name = video['original_filename']?.toString() ?? 'this video';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete this uploaded video?'),
+        content: Text('Delete "$name" from your Google Drive? This cannot be undone. The original video on your phone will remain safe. You can then upload the correct video.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6F2438)),
+            child: const Text('Delete this video'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() { _busy = true; _status = null; });
+    try {
+      final response = await supabase.functions.invoke('google-drive-storage', body: {
+        'action': 'delete_video',
+        'videoId': video['id'],
+      });
+      final data = _map(response.data);
+      if (response.status != 200 || data['ok'] != true || data['deleted'] != true) {
+        throw Exception(data['error']?.toString() ?? 'Could not delete this Google Drive video.');
+      }
+      if (mounted) setState(() {
+        _shareUrl = null;
+        _sharePin = null;
+        _status = '"$name" deleted from Google Drive. Your phone original is safe. You can upload the correct video now.';
+      });
+      await _loadOrder();
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Delete video: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteDriveCopy() async {
+    final targets = _videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).toList();
+    if (targets.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete your Google Drive copies?'),
+        content: Text(
+          'This permanently deletes ${targets.length} Wedding Video Share copy/copies from your Google Drive. '
+          'The original videos on your phone will not be touched.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(false), child: const Text('Keep videos')),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF6F2438)),
+            child: const Text('Delete Drive copies'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() { _busy = true; _status = null; });
+    try {
+      for (final video in targets) {
+        final response = await supabase.functions.invoke('google-drive-storage', body: {
+          'action': 'delete_video',
+          'videoId': video['id'],
+        });
+        final data = _map(response.data);
+        if (response.status != 200 || data['ok'] != true || data['deleted'] != true) {
+          throw Exception(data['error']?.toString() ?? 'A Google Drive copy could not be deleted.');
+        }
+      }
+      if (mounted) setState(() => _status =
+          'All selected Google Drive copies were deleted. Your phone originals remain untouched.');
+      await _loadOrder();
+    } catch (e) {
+      if (mounted) setState(() => _status = 'Delete: $e');
+      await _loadOrder();
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String _notificationDate(dynamic value) {
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    if (parsed == null) return '';
+    final local = parsed.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}/${local.month.toString().padLeft(2, '0')}/${local.year}';
+  }
+
+  Future<void> _openLegal(String document) async {
+    final uri = Uri.parse('https://github.com/yuv693/wedding-video-share/blob/main/docs/$document');
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _copyShareLink() async {
+    if (_shareUrl == null) return;
+    await Clipboard.setData(ClipboardData(text: _shareUrl!));
+    if (mounted) setState(() => _status = 'Private link copied. Send the password separately.');
+  }
+
+  Future<void> _shareGuestLink() async {
+    if (_shareUrl == null) return;
+    await Share.share(
+      'Here is your private wedding video link:\n${_shareUrl!}\n\nPlease ask me for the 6-digit download password separately.',
+      subject: 'Wedding video link',
+    );
+  }
+
+  Future<void> _shareDownloadPin() async {
+    if (_sharePin == null) return;
+    await Share.share(
+      'Wedding video download password: ${_sharePin!}',
+      subject: 'Wedding video password',
+    );
+  }
+
+  String _bytes(dynamic value) {
+    final n = value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
+    if (n >= 1024 * 1024 * 1024) return '${(n / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+    if (n >= 1024 * 1024) return '${(n / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return '${(n / 1024).toStringAsFixed(0)} KB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const burgundy = Color(0xFF6F2438);
+    final user = supabase.auth.currentUser;
+    final paid = _order?['payment_status'] == 'paid';
+    final locked = _order?['upload_locked'] == true;
+    final videoReady = _videos.any((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null);
+    final videoDeleted = _videos.isNotEmpty && _videos.every((v) => v['upload_status'] == 'deleted');
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Wedding Video Share', style: TextStyle(fontWeight: FontWeight.w800)),
+        actions: [
+          IconButton(onPressed: _busy || _uploading ? null : _refresh, icon: const Icon(Icons.refresh), tooltip: 'Refresh'),
+          IconButton(onPressed: _busy || _uploading ? null : () => setState(() => _selectedTab = 2), icon: const Icon(Icons.person_outline_rounded), tooltip: 'Account'),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        backgroundColor: Colors.white,
+        indicatorColor: const Color(0xFFF4EAE6),
+        selectedIndex: _selectedTab,
+        onDestinationSelected: (index) => setState(() => _selectedTab = index),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
+          NavigationDestination(icon: Icon(Icons.video_library_outlined), selectedIcon: Icon(Icons.video_library_rounded), label: 'Videos'),
+          NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Account'),
+        ],
+      ),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              if (_selectedTab == 0) ...[
+              Container(
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(color: const Color(0xFFF4EAE6), borderRadius: BorderRadius.circular(22)),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Icon(Icons.favorite, color: burgundy, size: 34),
+                  const SizedBox(height: 12),
+                  const Text('Celebrate. Share. Cherish.',
+                    style: TextStyle(fontSize: 13, letterSpacing: 1.2, fontWeight: FontWeight.w800, color: burgundy)),
+                  const SizedBox(height: 8),
+                  const Text('One wedding. One clear plan.',
+                    style: TextStyle(fontSize: 23, height: 1.2, fontWeight: FontWeight.w800, color: burgundy)),
+                  const SizedBox(height: 8),
+                  Text(user?.email ?? user?.phone ?? 'Your account'),
+                  const SizedBox(height: 8),
+                  const Text('Your own Google Drive. Your memories stay in your control.',
+                    style: TextStyle(color: Color(0xFF66575B), fontSize: 13)),
+                ]),
+              ),
+              const SizedBox(height: 18),
+              Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Your Wedding', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  const Text('₹290  •  One-Wedding Plan'),
+                  const Text('Upload up to 10 wedding videos, each up to 40 GB.'),
+                  const Text('Maximum video size: 40 GB (decimal).'),
+                  const SizedBox(height: 12),
+                  if (paid)
+                    const Row(children: [Icon(Icons.verified, color: Colors.green), SizedBox(width: 8), Text('Payment verified by server')])
+                  else
+                    const Text('Upload your wedding video first. Pay ₹290 only when you are ready to share it.\nRecovery email is optional.'),
+                  if (_order != null) ...[
+                    const SizedBox(height: 8),
+                    Text('Order status: ${_order!['payment_status'] ?? 'pending'}'),
+                    if (locked) const Text('This account has completed its video cycle.'),
+                  ],
+                ]),
+              )),
+              ],
+              if (_selectedTab == 1) ...[
+              Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Your Drive. Your storage.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  Text(_driveEmail == null
+                      ? 'Connect your Google Drive to store your wedding video securely using your own Drive storage.'
+                      : 'Connected to your Google Drive: $_driveEmail'),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _busy || _uploading ? null : _connectDrive,
+                    icon: const Icon(Icons.add_link),
+                    label: Text(_driveEmail == null ? 'Connect Google Drive' : 'Reconnect Google Drive'),
+                  ),
+                  if (_quota != null) ...[
+                    const SizedBox(height: 8),
+                    Text('Drive used: ${_bytes(_quota!['usedBytes'])}  •  Available: ${_quota!['availableBytes'] == null ? 'Not reported' : _bytes(_quota!['availableBytes'])}'),
+                  ],
+                ]),
+              )),
+              const SizedBox(height: 12),
+              Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Upload without the guesswork.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 8),
+                  const Text('Choose up to 10 videos together. They upload one by one to your own Google Drive; phone originals are never deleted. If the app closes or the internet stops, reopen this app and tap Resume Upload.'),
+                  const SizedBox(height: 12),
+                  if (videoReady)
+                    ..._videos.where((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null).map((v) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(children: [
+                        const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text('${v['original_filename']} (${_bytes(v['file_size_bytes'])})')),
+                        IconButton(
+                          tooltip: 'Delete this uploaded video',
+                          onPressed: _busy || _uploading ? null : () => _deleteSingleDriveVideo(v),
+                          icon: const Icon(Icons.delete_outline, color: Color(0xFF6F2438)),
+                        ),
+                      ]),
+                    )).toList(),
+                  if (videoDeleted)
+                    const Text('Some or all Google Drive copies were deleted. The phone originals remain untouched.'),
+                  if (_pendingUploads.any((p) => p.orderId == (_order?['id']?.toString() ?? '')))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _busy || _uploading || _driveEmail == null ? null : _resumePendingUploads,
+                          icon: const Icon(Icons.play_circle_outline),
+                          label: Text('Resume Upload (${_pendingUploads.where((p) => p.orderId == (_order?['id']?.toString() ?? '')).length} saved)'),
+                        ),
+                      ),
+                    ),
+                  if (!locked && _activeVideoCount < 10)
+                    FilledButton.icon(
+                      onPressed: _busy || _uploading || _driveEmail == null ? null : _chooseAndUpload,
+                      style: FilledButton.styleFrom(backgroundColor: burgundy),
+                      icon: const Icon(Icons.video_file),
+                      label: Text(_videos.isEmpty ? 'Choose up to 10 wedding videos' : 'Add more videos (${10 - _activeVideoCount} slots left)'),
+                    )
+                  else
+                    const Text('This wedding has reached its 10-video limit or is locked.'),
+                  if (_uploading) ...[
+                    const SizedBox(height: 14),
+                    Row(children: [
+                      const Expanded(child: Text('Uploading to your Google Drive…', style: TextStyle(fontWeight: FontWeight.w700))),
+                      TextButton.icon(
+                        onPressed: () => setState(() => _pauseRequested = true),
+                        icon: const Icon(Icons.pause_circle_outline),
+                        label: const Text('Pause'),
+                      ),
+                    ]),
+                    if (_currentUploadName != null) Text(_currentUploadName!, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 8),
+                    LinearProgressIndicator(value: _uploadProgress),
+                    const SizedBox(height: 6),
+                    Text('${(_uploadProgress * 100).toStringAsFixed(1)}% uploaded · resumable 8 MB chunks'),
+                  ],
+                  if (!paid) const Text('Payment is needed only when you share your uploaded video.', style: TextStyle(color: Colors.black54)),
+                  if (_driveEmail == null) const Text('Connect Google Drive before uploading.', style: TextStyle(color: Colors.black54)),
+                  if (locked) const Text('This account cannot upload more videos.', style: TextStyle(color: Colors.black54)),
+                ]),
+              )),
+              if (videoReady) ...[
+                const SizedBox(height: 12),
+                Card(color: Colors.white, elevation: 0, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))), child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('A private link, ready to send.', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 8),
+                    const Text("Pay ₹290 to unlock private sharing. After the receiver's full video transfer is verified by our server, the Google Drive copy will be automatically deleted if you confirm below. Your phone original is never deleted."),
+                    const SizedBox(height: 12),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _autoDeleteConsent,
+                      onChanged: _busy || _uploading ? null : (value) => unawaited(_updateAutoDeleteConsent(value == true)),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: const Text('I agree: automatically delete each Google Drive video after its full receiver download is verified.'),
+                      subtitle: const Text('Only the Google Drive copy is deleted. The original on your phone is not touched. If the download is interrupted or cannot be verified, the Drive copy is kept.'),
+                    ),
+                    if (!paid && _manualPaymentStatus == 'pending')
+                      const ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.hourglass_top_rounded, color: Colors.orange),
+                        title: Text('UPI payment submitted'),
+                        subtitle: Text('Waiting for manual verification. Refresh this screen for status updates.'),
+                      )
+                    else if (!paid)
+                      FilledButton.icon(
+                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _startPayment,
+                        icon: const Icon(Icons.qr_code_2_rounded),
+                        label: const Text('Pay ₹290 by QR / UPI'),
+                        style: FilledButton.styleFrom(backgroundColor: burgundy),
+                      )
+                    else
+                      OutlinedButton.icon(
+                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _makeShareLink,
+                        icon: const Icon(Icons.link),
+                        label: const Text('Create / refresh private link'),
+                      ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _createAndShareGuestLink,
+                        icon: const Icon(Icons.share_rounded),
+                        label: const Text('Share link on WhatsApp / other apps'),
+                        style: FilledButton.styleFrom(backgroundColor: burgundy),
+                      ),
+                    ),
+                    const Text(
+                      'If a link has not been created in this app session, this button will create a fresh private link first, then open the Android share menu.',
+                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                    ),
+                    if (_shareUrl != null) ...[
+                      const SizedBox(height: 8),
+                      const Text('Private receiver link', style: TextStyle(fontWeight: FontWeight.w700)),
+                      SelectableText(_shareUrl!, style: const TextStyle(fontSize: 12)),
+                      const SizedBox(height: 12),
+                      if (_sharePin != null) ...[
+                        const Text('6-digit download password', style: TextStyle(fontWeight: FontWeight.w700)),
+                        SelectableText(_sharePin!, style: const TextStyle(fontSize: 26, letterSpacing: 5, fontWeight: FontWeight.w800, color: burgundy)),
+                        const Text('Send this password separately from the link.', style: TextStyle(color: Colors.black54, fontSize: 12)),
+                        const SizedBox(height: 8),
+                        OutlinedButton.icon(onPressed: () async { await Clipboard.setData(ClipboardData(text: _sharePin!)); if (mounted) setState(() => _status = 'Download password copied.'); }, icon: const Icon(Icons.password), label: const Text('Copy password')),
+                      ],
+                      const SizedBox(height: 8),
+                      FilledButton.icon(
+                        onPressed: _shareGuestLink,
+                        icon: const Icon(Icons.chat_rounded),
+                        label: const Text('Share on WhatsApp / other apps'),
+                        style: FilledButton.styleFrom(backgroundColor: burgundy),
+                      ),
+                      const SizedBox(height: 6),
+                      const Text(
+                        'Choose WhatsApp, Gmail, Messages or any sharing app from the Android share menu. Send the 6-digit password separately.',
+                        style: TextStyle(color: Colors.black54, fontSize: 12),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_sharePin != null)
+                        OutlinedButton.icon(
+                          onPressed: _shareDownloadPin,
+                          icon: const Icon(Icons.password_rounded),
+                          label: const Text('Share password separately'),
+                        ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _copyShareLink,
+                        icon: const Icon(Icons.copy),
+                        label: const Text('Copy guest link'),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    OutlinedButton.icon(
+                      onPressed: _busy || _uploading ? null : _deleteDriveCopy,
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('Delete my Google Drive copy'),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Only the Drive copy is deleted. Your phone original is not touched.',
+                      style: TextStyle(color: Colors.black54, fontSize: 12),
+                    ),
+                  ]),
+                )),
+              ],
+              if (videoDeleted) ...[
+                const SizedBox(height: 12),
+                Card(
+                  color: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))),
+                  child: ListTile(
+                    leading: const Icon(Icons.delete_sweep_outlined, color: burgundy),
+                    title: const Text('Drive copy deleted'),
+                    subtitle: const Text('Your phone original remains untouched. This account’s one-video plan stays used.'),
+                  ),
+                ),
+              ],
+              ],
+              if (_selectedTab == 2) ...[
+              const SizedBox(height: 12),
+              AccountAccessCard(onLinked: _refresh),
+              if (_order?['upload_locked'] == true) ...[
+                const SizedBox(height: 12),
+                Card(
+                  color: const Color(0xFFF4EAE6),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: const BorderSide(color: Color(0xFFE8D8D0)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.check_circle_rounded, color: Color(0xFF26734D), size: 34),
+                        const SizedBox(height: 10),
+                        const Text('Download complete!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: burgundy)),
+                        const SizedBox(height: 6),
+                        const Text('Thank you for sharing your special day. The server verified the full video transfer. Your Google Drive copy is automatically deleted when you gave consent; your phone original remains untouched.'),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () => setState(() => _selectedTab = 1),
+                          icon: const Icon(Icons.video_library_outlined),
+                          label: const Text('View video and storage'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  color: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    side: const BorderSide(color: Color(0xFFEADFD9)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Ready for another celebration?', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        const Text('Create a separate account for the next wedding. Your completed wedding stays saved in this account.'),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _busy ? null : _startNewWedding,
+                            icon: const Icon(Icons.add_rounded),
+                            label: const Text('Start another wedding'),
+                            style: FilledButton.styleFrom(backgroundColor: burgundy),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Card(
+                color: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: const BorderSide(color: Color(0xFFEADFD9))),
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.notifications_active_outlined, color: burgundy),
+                          SizedBox(width: 8),
+                          Text('Guest download updates', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_notifications.isEmpty)
+                        const Text('When your guest finishes the full video transfer, a completion update will appear here.')
+                      else
+                        for (final notification in _notifications)
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(
+                              notification['notification_type'] == 'receiver_download_completed'
+                                  ? Icons.check_circle_rounded
+                                  : notification['notification_type'] == 'share_ready'
+                                      ? Icons.link_rounded
+                                      : Icons.notifications_none_rounded,
+                              color: notification['notification_type'] == 'receiver_download_completed'
+                                  ? Colors.green
+                                  : burgundy,
+                            ),
+                            title: Text(notification['title']?.toString() ?? 'Account update',
+                                style: const TextStyle(fontWeight: FontWeight.w700)),
+                            subtitle: SelectableText(notification['message']?.toString() ?? ''),
+                            trailing: Text(
+                              _notificationDate(notification['created_at']),
+                              style: const TextStyle(fontSize: 10, color: Colors.black54),
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_status != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(color: const Color(0xFFF8F0E8), borderRadius: BorderRadius.circular(12)),
+                  child: Text(_status!),
+                ),
+              ],
+              const SizedBox(height: 20),
+              const Text('Wedding Video Share', textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.black54, fontSize: 12)),
+              Wrap(
+                alignment: WrapAlignment.center,
+                children: [
+                  TextButton(onPressed: () => _openLegal('privacy-policy.md'), child: const Text('Privacy Policy')),
+                  TextButton(onPressed: () => _openLegal('terms-of-service.md'), child: const Text('Terms of Service')),
+                ],
+              ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+).hasMatch(transferToken)) {
+        throw Exception('Could not securely prepare your saved Google Drive connection. No account was changed.');
+      }
+
       await supabase.auth.signOut();
-      await supabase.auth.signInAnonymously();
+      final signedIn = await supabase.auth.signInAnonymously();
+      if (signedIn.user == null) {
+        throw Exception('New wedding account could not be created.');
+      }
+
+      final claimed = await supabase.functions.invoke(
+        'google-drive-oauth',
+        body: {'action': 'transfer_claim', 'transferToken': transferToken},
+      );
+      final claimedData = _map(claimed.data);
+      if (claimed.status != 200 || claimedData['ok'] != true) {
+        throw Exception('New wedding account was created, but Google Drive connection transfer needs retry. Please reconnect Drive before uploading.');
+      }
+
+      if (mounted) {
+        setState(() {
+          _order = null;
+          _videos = [];
+          _shareUrl = null;
+          _sharePin = null;
+          _manualPaymentStatus = null;
+          _status = 'New wedding account created. Your saved Google Drive connection is ready.';
+        });
+        await _refresh();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not create a new wedding account: $e')),
+          SnackBar(content: Text('Could not complete the new wedding setup: $e')),
         );
       }
     }
