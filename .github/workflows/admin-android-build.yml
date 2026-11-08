@@ -26,16 +26,50 @@ jobs:
           if [ ! -f admin_app/android/gradlew ]; then
             flutter create --platforms=android --org com.weddingvideoshare --project-name wedding_video_share_admin admin_app
           fi
-      - name: Add Android internet permission for release builds
+      - name: Configure Firebase Android app and Google Services plugin
+        run: |
+          set -euo pipefail
+          test -f admin_app/firebase/google-services.json
+          mkdir -p admin_app/android/app
+          cp admin_app/firebase/google-services.json admin_app/android/app/google-services.json
+          python3 - <<'PY'
+          from pathlib import Path
+          settings = Path('admin_app/android/settings.gradle.kts')
+          app = Path('admin_app/android/app/build.gradle.kts')
+          if not settings.exists() or not app.exists():
+              raise SystemExit('Expected Kotlin Gradle files from Flutter Android template were not generated.')
+          s = settings.read_text()
+          plugin = '    id("com.google.gms.google-services") version "4.4.4" apply false\n'
+          if 'com.google.gms.google-services' not in s:
+              marker = 'plugins {\n'
+              if marker not in s: raise SystemExit('settings.gradle.kts plugins block missing')
+              s = s.replace(marker, marker + plugin, 1)
+              settings.write_text(s)
+          a = app.read_text()
+          if 'com.google.gms.google-services' not in a:
+              marker = 'plugins {\n'
+              if marker not in a: raise SystemExit('app build.gradle.kts plugins block missing')
+              a = a.replace(marker, marker + '    id("com.google.gms.google-services")\n', 1)
+              app.write_text(a)
+          print('Google Services plugin configured.')
+          PY
+      - name: Add Android internet and notification permissions
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p = Path("admin_app/android/app/src/main/AndroidManifest.xml")
           s = p.read_text()
-          permission = '    <uses-permission android:name="android.permission.INTERNET" />\n'
-          if 'android.permission.INTERNET' not in s:
-              s = s.replace('<application', permission + '    <application', 1)
-              p.write_text(s)
+          permissions = '    <uses-permission android:name="android.permission.INTERNET" />\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
+          if 'android.permission.INTERNET' not in s or 'android.permission.POST_NOTIFICATIONS' not in s:
+              for line in permissions.splitlines(True):
+                  if line.strip().split('"')[1] not in s:
+                      s = s.replace('<application', line + '    <application', 1)
+          metadata = '''        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="payment_requests" />
+        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@mipmap/ic_launcher" />
+'''
+          if 'com.google.firebase.messaging.default_notification_channel_id' not in s:
+              s = s.replace('</application>', metadata + '    </application>', 1)
+          p.write_text(s)
           PY
       - name: Configure admin sign-in deep link
         run: |
