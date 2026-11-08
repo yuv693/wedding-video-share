@@ -170,7 +170,8 @@ Deno.serve(async (req) => {
       const orderId = String(body.orderId ?? "");
       if (!orderId) return json({ error: "ORDER_NOT_FOUND" }, 404);
       const admin = ctx.supabaseAdmin;
-      const customerId = ctx.userClaims.sub;
+      const customerId = ctx.userClaims?.id ?? ctx.jwtClaims?.sub;
+      if (!customerId) return json({ error: "ORDER_NOT_FOUND" }, 404);
       const { data: order } = await admin.from("wedding_orders").select("id,customer_id,payment_status,upload_locked").eq("id", orderId).eq("customer_id", customerId).maybeSingle();
       if (!order || order.payment_status !== "paid") throw new Error("ORDER_NOT_FOUND");
       const { data: videos, error: videosError } = await admin.from("wedding_videos")
