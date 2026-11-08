@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "1039771261692",
+    "project_id": "wedding-video-share",
+    "storage_bucket": "wedding-video-share.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1039771261692:android:bdad7cad5623d43bdd5579",
+        "android_client_info": {
+          "package_name": "com.weddingvideoshare.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1039771261692-9r3fq9a7iqf1hhvao52ak4mavadlj01t.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJ7zap2-Y8XJVBZY37oBuw3nWorMfgUt0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1039771261692-9r3fq9a7iqf1hhvao52ak4mavadlj01t.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1039771261692:android:61a88fea6e3676dddd5579",
+        "android_client_info": {
+          "package_name": "com.weddingvideoshare.wedding_video_share_admin"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1039771261692-9r3fq9a7iqf1hhvao52ak4mavadlj01t.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJ7zap2-Y8XJVBZY37oBuw3nWorMfgUt0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1039771261692-9r3fq9a7iqf1hhvao52ak4mavadlj01t.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
