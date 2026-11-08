@@ -18,10 +18,12 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _uploadService = VideoUploadService();
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
+  Timer? _statusRefreshTimer;
+  bool _refreshing = false;
   bool _busy = false, _uploading = false, _autoDeleteConsent = false, _pauseRequested = false;
   String? _currentUploadName;
   String? _manualPaymentStatus;
@@ -38,6 +40,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _statusRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        unawaited(_refresh());
+      }
+    });
     _linkSubscription = _appLinks.uriLinkStream.listen(_handleIncomingLink);
     unawaited(_loadInitialLink());
     _refresh();
@@ -46,8 +54,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _statusRefreshTimer?.cancel();
     _linkSubscription?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_refresh());
   }
 
   Future<void> _loadInitialLink() async {
@@ -143,10 +158,16 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _refresh() async {
-    await _loadOrder();
-    await _loadQuota();
-    await _loadNotifications();
-    await _loadManualPaymentStatus();
+    if (_refreshing || !mounted) return;
+    _refreshing = true;
+    try {
+      await _loadOrder();
+      await _loadQuota();
+      await _loadNotifications();
+      await _loadManualPaymentStatus();
+    } finally {
+      _refreshing = false;
+    }
   }
 
   Future<void> _loadOrder() async {
