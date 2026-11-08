@@ -207,7 +207,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadQuota() async {
     try {
-      final response = await supabase.functions.invoke('google-drive-storage', body: {'action': 'quota'});
+      final session = supabase.auth.currentSession;
+      if (session == null || session.accessToken.isEmpty) {
+        throw Exception('Customer session is not ready. Please reopen the app and try again.');
+      }
+      final response = await supabase.functions.invoke(
+        'google-drive-storage',
+        body: {'action': 'quota'},
+        headers: {'Authorization': 'Bearer ${session.accessToken}'},
+      );
       final data = _map(response.data);
       if (!mounted) return;
       if (response.status == 200 && data['ok'] == true) {
@@ -241,7 +249,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _connectDrive() async {
     setState(() { _busy = true; _status = null; });
     try {
-      final response = await supabase.functions.invoke('google-drive-oauth', body: {'action': 'start'});
+      final session = supabase.auth.currentSession;
+      if (session == null || session.accessToken.isEmpty) {
+        throw Exception('Customer session is not ready. Please reopen the app and try again.');
+      }
+      final response = await supabase.functions.invoke(
+        'google-drive-oauth',
+        body: {'action': 'start'},
+        headers: {'Authorization': 'Bearer ${session.accessToken}'},
+      );
       final data = _map(response.data);
       final authUrl = data['authorizationUrl']?.toString();
       if (response.status != 200 || authUrl == null) {
