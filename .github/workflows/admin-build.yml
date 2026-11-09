@@ -55,7 +55,16 @@ jobs:
           a = app.read_text()
           if "com.google.gms.google-services" not in a:
               a = a.replace("plugins {\n", 'plugins {\n    id("com.google.gms.google-services")\n', 1)
-              app.write_text(a)
+          import re
+          if "isCoreLibraryDesugaringEnabled" not in a:
+              if re.search(r"compileOptions\\s*\\{", a):
+                  a = re.sub(r"(compileOptions\\s*\\{)", r"\\1\\n        isCoreLibraryDesugaringEnabled = true", a, count=1)
+              else:
+                  a = a.replace("android {", "android {\\n    compileOptions { isCoreLibraryDesugaringEnabled = true }", 1)
+          if "coreLibraryDesugaring(" not in a:
+              dep = 'dependencies {\\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\\n}\\n'
+              a = a.rstrip() + "\\n\\n" + dep
+          app.write_text(a)
           PY
       - name: Configure Android manifest
         shell: bash
