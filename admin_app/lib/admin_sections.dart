@@ -196,15 +196,44 @@ class _AdminSectionPageState extends State<AdminSectionPage> {
                 final size = bytes >= 1024 * 1024 * 1024
                     ? '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB'
                     : '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-                return Card(child: ListTile(
-                  leading: const CircleAvatar(child: Icon(Icons.video_file)),
-                  title: Text(item['original_filename']?.toString() ?? 'Wedding video'),
-                  subtitle: Text('${item['customer_email'] ?? 'Guest account'}\nUpload: ${item['upload_status'] ?? '—'} • ${size}\nPayment: ${item['payment_status'] ?? '—'} • ${date(item['uploaded_at'] ?? item['created_at'])}\nOrder: ${item['order_id'] ?? ''}'),
-                  isThreeLine: true,
-                  trailing: item['deleted_at'] == null
-                      ? const Icon(Icons.check_circle_outline, color: Colors.green)
-                      : const Icon(Icons.delete_outline, color: Colors.grey),
-                ));
+                final canShare = item['deleted_at'] == null && item['upload_status'] == 'uploaded' && item['payment_status'] == 'paid';
+                return Card(child: Column(children: [
+                  ListTile(
+                    leading: const CircleAvatar(child: Icon(Icons.video_file)),
+                    title: Text(item['original_filename']?.toString() ?? 'Wedding video'),
+                    subtitle: Text('${item['customer_email'] ?? 'Guest account'}\nUpload: ${item['upload_status'] ?? '—'} • ${size}\nPayment: ${item['payment_status'] ?? '—'} • ${date(item['uploaded_at'] ?? item['created_at'])}\nOrder: ${item['order_id'] ?? ''}'),
+                    isThreeLine: true,
+                    trailing: item['deleted_at'] == null ? const Icon(Icons.check_circle_outline, color: Colors.green) : const Icon(Icons.delete_outline, color: Colors.grey),
+                  ),
+                  if (canShare) Align(alignment: Alignment.centerRight, child: Padding(
+                    padding: const EdgeInsets.only(right: 12, bottom: 10),
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.link),
+                      label: const Text('Generate new guest link'),
+                      onPressed: () async {
+                        final yes = await showDialog<bool>(context: context, builder: (c) => AlertDialog(
+                          title: const Text('Generate a new link?'),
+                          content: const Text('This creates a new guest link and PIN and replaces the current active link for this wedding order.'),
+                          actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')), FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('Continue'))],
+                        ));
+                        if (yes != true || !context.mounted) return;
+                        try {
+                          final response = await Supabase.instance.client.functions.invoke('manual-payment-admin', body: {'action': 'create_link', 'order_id': item['order_id'], 'customer_id': item['customer_id']});
+                          final result = response.data as Map;
+                          if (response.status != 200 || result['error'] != null) throw Exception(result['error'] ?? 'Unable to create link');
+                          if (!context.mounted) return;
+                          await showDialog<void>(context: context, builder: (c) => AlertDialog(
+                            title: const Text('New guest link ready'),
+                            content: SelectableText('Link:\n${result['shareUrl']}\n\n6-digit PIN: ${result['downloadPin']}'),
+                            actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('Close'))],
+                          ));
+                        } catch (e) {
+                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+                        }
+                      },
+                    ),
+                  )),
+                ]));
               }),
           ],
         ))),
