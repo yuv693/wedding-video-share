@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// Owner console sections: payment history, revenue, customers, videos and profile.
 class AdminSectionPage extends StatefulWidget {
   const AdminSectionPage({super.key, required this.section});
   final String section;
