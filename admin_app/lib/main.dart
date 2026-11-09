@@ -34,7 +34,6 @@ Future<void> initializePushNotifications() async {
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(paymentChannel);
   final messaging = FirebaseMessaging.instance;
-  await messaging.requestPermission(alert: true, badge: true, sound: true);
   FirebaseMessaging.onMessage.listen((message) async {
     final notification = message.notification;
     await localNotifications.show(
@@ -55,21 +54,30 @@ Future<void> initializePushNotifications() async {
   });
 }
 
-Future<void> registerAdminPushToken() async {
+Future<String> registerAdminPushToken({bool askPermission = false}) async {
   final user = Supabase.instance.client.auth.currentUser;
-  if (user == null || user.email?.toLowerCase() != endpointEmail) return;
-  try {
-    final token = await FirebaseMessaging.instance.getToken();
-    if (token == null || token.isEmpty) return;
-    await Supabase.instance.client.from('admin_fcm_tokens').upsert({
-      'user_id': user.id,
-      'fcm_token': token,
-      'platform': 'android',
-      'updated_at': DateTime.now().toIso8601String(),
-    }, onConflict: 'fcm_token');
-  } catch (error) {
-    debugPrint('Admin FCM token registration failed: $error');
+  if (user == null || user.email?.toLowerCase() != endpointEmail) {
+    throw Exception('Please sign in with the owner account first.');
   }
+  final messaging = FirebaseMessaging.instance;
+  if (askPermission) {
+    await messaging.requestPermission(alert: true, badge: true, sound: true);
+  }
+  final settings = await messaging.getNotificationSettings();
+  if (settings.authorizationStatus == AuthorizationStatus.denied) {
+    throw Exception('Notifications are blocked. Open Android Settings > Apps > Owner Console > Notifications and turn Allow notifications ON.');
+  }
+  final token = await messaging.getToken();
+  if (token == null || token.isEmpty) {
+    throw Exception('Firebase could not create this phone notification token. Check internet and try again.');
+  }
+  await Supabase.instance.client.from('admin_fcm_tokens').upsert({
+    'user_id': user.id,
+    'fcm_token': token,
+    'platform': 'android',
+    'updated_at': DateTime.now().toIso8601String(),
+  }, onConflict: 'fcm_token');
+  return 'Notification permission: ${settings.authorizationStatus.name}. Phone registered successfully.';
 }
 
 StreamSubscription<String>? adminTokenRefreshSubscription;
@@ -81,7 +89,7 @@ Future<void> main() async {
   await initializePushNotifications();
   await Supabase.initialize(url: projectUrl, publishableKey: publicKey);
   if (Supabase.instance.client.auth.currentSession != null) {
-    await registerAdminPushToken();
+    try { await registerAdminPushToken(askPermission: true); } catch (error) { debugPrint('Admin notification setup: $error'); }
   }
   adminTokenRefreshSubscription ??= FirebaseMessaging.instance.onTokenRefresh.listen((_) {
     unawaited(registerAdminPushToken());
@@ -120,7 +128,7 @@ class _LoginPageState extends State<LoginPage> {
         signedIn = state.session != null;
         if (signedIn) status = null;
       });
-      if (state.session != null) unawaited(registerAdminPushToken());
+      if (state.session != null) unawaited(registerAdminPushToken(askPermission: true).catchError((error) { debugPrint('Admin notification setup: $error'); }));
     }, onError: (Object error) {
       if (mounted) setState(() => status = 'Sign-in callback failed: $error');
     });
