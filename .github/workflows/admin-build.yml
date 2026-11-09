@@ -76,7 +76,7 @@ jobs:
           metadata = '        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="payment_requests" />\n'
           if "com.google.firebase.messaging.default_notification_channel_id" not in s:
               s = s.replace("</application>", metadata + "    </application>", 1)
-          activity = re.search(r"<activity\\b[^>]*>", s)
+          activity = re.search(r"<activity\b[^>]*>", s)
           if not activity:
               raise SystemExit("MainActivity activity not found")
           tag = activity.group(0)
@@ -91,7 +91,7 @@ jobs:
                   </intent-filter>
           '''
           if 'android:scheme="weddingvideoshareadmin"' not in s:
-              s = s.replace("</activity>", intent + "\\n        </activity>", 1)
+              s = s.replace("</activity>", intent + "\n        </activity>", 1)
           p.write_text(s)
           ET.parse(p)
           PY
