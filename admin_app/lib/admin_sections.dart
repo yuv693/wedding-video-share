@@ -257,10 +257,34 @@ class _AdminSectionPageState extends State<AdminSectionPage> {
         subtitle: const Text('Allow alerts for new payment requests'),
         trailing: const Icon(Icons.chevron_right),
         onTap: () async {
-          final settings = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Notification permission: ${settings.authorizationStatus.name}')));
-        },
+          try {
+            await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
+            final settings = await FirebaseMessaging.instance.getNotificationSettings();
+            if (settings.authorizationStatus == AuthorizationStatus.denied) {
+              throw Exception('Notifications are blocked. Open Android Settings > Apps > Owner Console > Notifications and turn Allow notifications ON.');
+            }
+            final currentUser = Supabase.instance.client.auth.currentUser;
+            if (currentUser == null || currentUser.email?.toLowerCase() != 'ym6250067@gmail.com') {
+              throw Exception('Please sign in with the owner account first.');
+            }
+            final token = await FirebaseMessaging.instance.getToken();
+            if (token == null || token.isEmpty) throw Exception('Firebase could not create a phone notification token. Check internet and try again.');
+            await Supabase.instance.client.from('admin_fcm_tokens').upsert({
+              'user_id': currentUser.id,
+              'fcm_token': token,
+              'platform': 'android',
+              'updated_at': DateTime.now().toIso8601String(),
+            }, onConflict: 'fcm_token');
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Notifications enabled and this phone registered successfully.')));
+          } catch (error) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(error.toString().replaceFirst('Exception: ', '')),
+              duration: const Duration(seconds: 8),
+            ));
+          }
+        },,
       )),
       const SizedBox(height: 16),
       FilledButton.icon(
