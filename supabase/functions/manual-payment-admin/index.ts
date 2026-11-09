@@ -30,6 +30,50 @@ Deno.serve(async(req)=>{
    const {data:txs,error}=await admin.from("payment_transactions").select("id,order_id,customer_id,amount_paise,currency,status,created_at,gateway_payload").eq("gateway","manual_upi").eq("status","pending").order("created_at",{ascending:true}).limit(100);if(error)return json({error:"PAYMENT_LIST_FAILED"},500);
    const rows=await Promise.all((txs??[]).map(async(tx:any)=>{const {data:u}=await admin.auth.admin.getUserById(tx.customer_id);return {...tx,customer_email:u.user?.email??"Guest account"};}));return json({ok:true,payments:rows});
   }
+  if(body.action==="dashboard"){
+   const [{data:payments,error:pe},{count:orderCount,error:oe},{count:videoCount,error:ve},{count:activeShares,error:se}] = await Promise.all([
+    admin.from("payment_transactions").select("amount_paise,status,created_at"),
+    admin.from("wedding_orders").select("id",{count:"exact",head:true}),
+    admin.from("wedding_videos").select("id",{count:"exact",head:true}).is("deleted_at",null),
+    admin.from("share_links").select("id",{count:"exact",head:true}).eq("is_active",true).is("revoked_at",null)
+   ]);
+   if(pe||oe||ve||se)return json({error:"DASHBOARD_LOAD_FAILED"},500);
+   const rows=payments??[];
+   const paid=rows.filter((p:any)=>p.status==="verified");
+   const pending=rows.filter((p:any)=>p.status==="pending");
+   return json({ok:true,stats:{totalRevenuePaise:paid.reduce((s:number,p:any)=>s+(p.amount_paise??0),0),verifiedPayments:paid.length,pendingPayments:pending.length,pendingAmountPaise:pending.reduce((s:number,p:any)=>s+(p.amount_paise??0),0),rejectedPayments:rows.filter((p:any)=>p.status==="failed").length,totalOrders:orderCount??0,totalVideos:videoCount??0,activeShares:activeShares??0}});
+  }
+  if(body.action==="history"){
+   const {data:txs,error}=await admin.from("payment_transactions").select("id,order_id,customer_id,gateway,gateway_order_id,gateway_payment_id,amount_paise,currency,status,verified_at,created_at").order("created_at",{ascending:false}).limit(500);
+   if(error)return json({error:"PAYMENT_HISTORY_FAILED"},500);
+   const rows=await Promise.all((txs??[]).map(async(tx:any)=>{const {data:u}=await admin.auth.admin.getUserById(tx.customer_id);return {...tx,customer_email:u.user?.email??"Guest account"};}));
+   const q=String(body.search??"").trim().toLowerCase();
+   return json({ok:true,payments:q?rows.filter((x:any)=>String(x.customer_email).toLowerCase().includes(q)||String(x.id).toLowerCase().includes(q)||String(x.status).toLowerCase().includes(q)):rows});
+  }
+  if(body.action==="customers"){
+   const {data:orders,error}=await admin.from("wedding_orders").select("id,customer_id,amount_paise,payment_status,workflow_status,upload_locked,created_at,updated_at").order("created_at",{ascending:false}).limit(500);
+   if(error)return json({error:"CUSTOMER_LIST_FAILED"},500);
+   const grouped=new Map<string,any>();
+   for(const o of orders??[]){const k=String(o.customer_id);const old=grouped.get(k)??{customer_id:k,orders:0,paid_orders:0,total_paid_paise:0,latest_order_at:o.created_at,latest_status:o.payment_status,workflow_status:o.workflow_status};old.orders++;if(o.payment_status==="paid"){old.paid_orders++;old.total_paid_paise+=o.amount_paise??0;}grouped.set(k,old);}
+   const rows=await Promise.all([...grouped.values()].map(async(c:any)=>{const {data:u}=await admin.auth.admin.getUserById(c.customer_id);return {...c,email:u.user?.email??"Guest account",created_at:u.user?.created_at??c.latest_order_at};}));
+   const q=String(body.search??"").trim().toLowerCase();
+   return json({ok:true,customers:q?rows.filter((x:any)=>String(x.email).toLowerCase().includes(q)||String(x.customer_id).toLowerCase().includes(q)):rows});
+  }
+  if(body.action==="videos"){
+   const {data:videos,error}=await admin.from("wedding_videos").select("id,order_id,customer_id,original_filename,file_size_bytes,upload_status,uploaded_at,created_at,deleted_at").order("created_at",{ascending:false}).limit(500);
+   if(error)return json({error:"VIDEO_LIST_FAILED"},500);
+   const orderIds=[...new Set((videos??[]).map((v:any)=>v.order_id).filter(Boolean))];
+   const customerIds=[...new Set((videos??[]).map((v:any)=>v.customer_id).filter(Boolean))];
+   const [{data:orders},{data:users}] = await Promise.all([
+    orderIds.length?admin.from("wedding_orders").select("id,payment_status,workflow_status").in("id",orderIds):Promise.resolve({data:[]}),
+    Promise.all(customerIds.map(async(id:string)=>{const {data:u}=await admin.auth.admin.getUserById(id);return {id,email:u.user?.email??"Guest account"};})).then(data=>({data}))
+   ]);
+   const orderMap=new Map((orders??[]).map((o:any)=>[o.id,o]));
+   const userMap=new Map((users??[]).map((u:any)=>[u.id,u.email]));
+   const rows=(videos??[]).map((v:any)=>({...v,customer_email:userMap.get(v.customer_id)??"Guest account",payment_status:orderMap.get(v.order_id)?.payment_status??"unknown",workflow_status:orderMap.get(v.order_id)?.workflow_status??"unknown"}));
+   const q=String(body.search??"").trim().toLowerCase();
+   return json({ok:true,videos:q?rows.filter((x:any)=>String(x.customer_email).toLowerCase().includes(q)||String(x.original_filename).toLowerCase().includes(q)||String(x.order_id).toLowerCase().includes(q)):rows});
+  }
   if(body.action==="approve"||body.action==="reject"){
    const id=String(body.payment_id??"");if(!/^[0-9a-f-]{36}$/i.test(id))return json({error:"INVALID_PAYMENT_ID"},400);
    const {data:tx,error:le}=await admin.from("payment_transactions").select("id,order_id,customer_id,status,gateway,amount_paise").eq("id",id).eq("gateway","manual_upi").maybeSingle();if(le||!tx)return json({error:"PAYMENT_NOT_FOUND"},404);if(tx.status!=="pending")return json({error:"PAYMENT_NOT_PENDING"},409);
