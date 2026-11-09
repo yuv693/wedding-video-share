@@ -28,19 +28,18 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 Future<void> initializePushNotifications() async {
   await localNotifications.initialize(
-    const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
+    settings: const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
   );
   await localNotifications
       .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(paymentChannel);
-  final messaging = FirebaseMessaging.instance;
   FirebaseMessaging.onMessage.listen((message) async {
     final notification = message.notification;
     await localNotifications.show(
-      message.hashCode,
-      notification?.title ?? 'New payment request',
-      notification?.body ?? 'A customer has submitted a payment request.',
-      NotificationDetails(
+      id: message.hashCode,
+      title: notification?.title ?? 'New payment request',
+      body: notification?.body ?? 'A customer has submitted a payment request.',
+      notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           paymentChannel.id,
           paymentChannel.name,
@@ -128,7 +127,7 @@ class _LoginPageState extends State<LoginPage> {
         signedIn = state.session != null;
         if (signedIn) status = null;
       });
-      if (state.session != null) unawaited(registerAdminPushToken(askPermission: true).catchError((error) { debugPrint('Admin notification setup: $error'); }));
+      if (state.session != null) unawaited(registerAdminPushToken(askPermission: true).catchError((error) { debugPrint('Admin notification setup: $error'); return ''; }));
     }, onError: (Object error) {
       if (mounted) setState(() => status = 'Sign-in callback failed: $error');
     });
