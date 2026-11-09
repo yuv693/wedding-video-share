@@ -41,7 +41,7 @@ jobs:
       - name: Run Flutter tests
         run: flutter test --no-pub
 
-      - name: Configure Play Store release signing when available
+      - name: Configure consistent release signing when available
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -56,18 +56,18 @@ jobs:
           keyAlias=$ANDROID_KEY_ALIAS
           storeFile=upload-keystore.jks
           EOF
-            echo "Play Store release signing configured."
+            echo "Consistent release signing configured."
           else
-            echo "Release keystore secrets are not configured; this build will use the development signing key."
+            echo "No release keystore configured; using the CI development signing key for this test build."
           fi
 
-      - name: Build installable Android APK
+      - name: Build installable Customer APK
         run: flutter build apk --release
 
-      - name: Upload installable APK
+      - name: Upload Customer APK for WhatsApp testing
         uses: actions/upload-artifact@v4
         with:
-          name: wedding-video-share-multi-video-apk
+          name: wedding-video-share-customer-apk-testing
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
