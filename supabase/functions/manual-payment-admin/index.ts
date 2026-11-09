@@ -31,14 +31,19 @@ Deno.serve(async(req)=>{
    const rows=await Promise.all((txs??[]).map(async(tx:any)=>{const {data:u}=await admin.auth.admin.getUserById(tx.customer_id);return {...tx,customer_email:u.user?.email??"Guest account"};}));return json({ok:true,payments:rows});
   }
   if(body.action==="dashboard"){
-   const [{data:payments,error:pe},{count:orderCount,error:oe},{count:videoCount,error:ve},{count:activeShares,error:se}] = await Promise.all([
-    admin.from("payment_transactions").select("amount_paise,status,created_at"),
+   const [{count:orderCount,error:oe},{count:videoCount,error:ve},{count:activeShares,error:se}] = await Promise.all([
     admin.from("wedding_orders").select("id",{count:"exact",head:true}),
     admin.from("wedding_videos").select("id",{count:"exact",head:true}).is("deleted_at",null),
     admin.from("share_links").select("id",{count:"exact",head:true}).eq("is_active",true).is("revoked_at",null)
    ]);
-   if(pe||oe||ve||se)return json({error:"DASHBOARD_LOAD_FAILED"},500);
-   const rows=payments??[];
+   if(oe||ve||se)return json({error:"DASHBOARD_LOAD_FAILED"},500);
+   const rows:any[]=[];
+   for(let offset=0;offset<100000;offset+=1000){
+    const {data:page,error}=await admin.from("payment_transactions").select("amount_paise,status").order("created_at",{ascending:true}).range(offset,offset+999);
+    if(error)return json({error:"DASHBOARD_LOAD_FAILED"},500);
+    rows.push(...(page??[]));
+    if(!page||page.length<1000)break;
+   }
    const paid=rows.filter((p:any)=>p.status==="verified");
    const pending=rows.filter((p:any)=>p.status==="pending");
    return json({ok:true,stats:{totalRevenuePaise:paid.reduce((s:number,p:any)=>s+(p.amount_paise??0),0),verifiedPayments:paid.length,pendingPayments:pending.length,pendingAmountPaise:pending.reduce((s:number,p:any)=>s+(p.amount_paise??0),0),rejectedPayments:rows.filter((p:any)=>p.status==="failed").length,totalOrders:orderCount??0,totalVideos:videoCount??0,activeShares:activeShares??0}});
