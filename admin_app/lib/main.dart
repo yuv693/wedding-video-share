@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'admin_sections.dart';
 
 const endpointEmail = 'ym6250067@gmail.com';
 const projectUrl = 'https://mnaswhizatnwfwmjmtvm.supabase.co';
@@ -252,14 +253,51 @@ class _ConsolePageState extends State<ConsolePage> with WidgetsBindingObserver {
     } catch (e) { setState(() => status = e.toString()); }
   }
 
+  Widget pendingBody() => RefreshIndicator(onRefresh: load, child: ListView(padding: const EdgeInsets.all(16), children: [
+    if (status.isNotEmpty) Text(status),
+    if (busy) const Center(child: CircularProgressIndicator()),
+    if (!busy && items.isEmpty) const Text('No pending payment requests.'),
+    for (final item in items) Card(child: ListTile(
+      title: Text('₹' + (((item['amount_paise'] as num?)?.toInt() ?? 0) ~/ 100).toString()),
+      subtitle: Text((item['customer_email']?.toString() ?? 'Customer') + '\\n' + (item['created_at']?.toString() ?? '')),
+      isThreeLine: true,
+      trailing: Wrap(children: [
+        IconButton(tooltip: 'Approve', onPressed: busy ? null : () => decide(item, 'approve'), icon: const Icon(Icons.check_circle, color: Colors.green)),
+        IconButton(tooltip: 'Reject', onPressed: busy ? null : () => decide(item, 'reject'), icon: const Icon(Icons.cancel_outlined, color: Colors.red)),
+      ]),
+    )),
+  ]));
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Owner Console'), actions: [IconButton(onPressed: load, icon: const Icon(Icons.refresh)), IconButton(onPressed: () => Supabase.instance.client.auth.signOut(), icon: const Icon(Icons.logout))]),
-    body: RefreshIndicator(onRefresh: load, child: ListView(padding: const EdgeInsets.all(16), children: [
-      if (status.isNotEmpty) Text(status),
-      if (busy) const Center(child: CircularProgressIndicator()),
-      if (!busy && items.isEmpty) const Text('No new requests.'),
-      for (final item in items) Card(child: ListTile(title: Text('₹' + (((item['amount_paise'] as num?)?.toInt() ?? 0) ~/ 100).toString()), subtitle: Text(item['customer_email']?.toString() ?? 'Customer'), trailing: Wrap(children: [IconButton(onPressed: busy ? null : () => decide(item, 'approve'), icon: const Icon(Icons.check_circle, color: Colors.green)), IconButton(onPressed: busy ? null : () => decide(item, 'reject'), icon: const Icon(Icons.cancel_outlined, color: Colors.red))]))),
-    ])),
+  Widget build(BuildContext context) => DefaultTabController(
+    length: 6,
+    child: Scaffold(
+      appBar: AppBar(
+        title: const Text('Owner Console'),
+        actions: [
+          IconButton(tooltip: 'Refresh pending requests', onPressed: load, icon: const Icon(Icons.refresh)),
+          IconButton(tooltip: 'Logout', onPressed: () => Supabase.instance.client.auth.signOut(), icon: const Icon(Icons.logout)),
+        ],
+        bottom: const TabBar(
+          isScrollable: true,
+          tabs: [
+            Tab(icon: Icon(Icons.payments_outlined), text: 'Pending'),
+            Tab(icon: Icon(Icons.receipt_long), text: 'History'),
+            Tab(icon: Icon(Icons.dashboard_outlined), text: 'Sales'),
+            Tab(icon: Icon(Icons.people_outline), text: 'Customers'),
+            Tab(icon: Icon(Icons.video_library_outlined), text: 'Videos'),
+            Tab(icon: Icon(Icons.settings_outlined), text: 'Profile'),
+          ],
+        ),
+      ),
+      body: TabBarView(children: [
+        pendingBody(),
+        const AdminSectionPage(section: 'history'),
+        const AdminSectionPage(section: 'dashboard'),
+        const AdminSectionPage(section: 'customers'),
+        const AdminSectionPage(section: 'videos'),
+        const AdminSectionPage(section: 'profile'),
+      ]),
+    ),
   );
 }
