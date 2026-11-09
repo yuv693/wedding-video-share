@@ -1,6 +1,6 @@
 name: Admin Android APK
 # Re-run after adding the expanded owner console screens.
-on:
+"on":
   push:
     branches: [main]
     paths:
