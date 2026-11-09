@@ -1,0 +1,109 @@
+name: Admin APK Build
+"on":
+  push:
+    branches:
+      - main
+    paths:
+      - "admin_app/**"
+      - ".github/workflows/admin-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  admin-apk:
+    name: Build Admin Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Prepare Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f admin_app/android/gradlew ]; then
+            flutter create --platforms=android --org com.weddingvideoshare --project-name wedding_video_share_admin admin_app
+          fi
+          test -f admin_app/firebase/google-services.json
+          mkdir -p admin_app/android/app
+          cp admin_app/firebase/google-services.json admin_app/android/app/google-services.json
+      - name: Configure Firebase plugin
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          settings = Path("admin_app/android/settings.gradle.kts")
+          app = Path("admin_app/android/app/build.gradle.kts")
+          s = settings.read_text()
+          plugin = '    id("com.google.gms.google-services") version "4.4.4" apply false\n'
+          if "com.google.gms.google-services" not in s:
+              s = s.replace("plugins {\n", "plugins {\n" + plugin, 1)
+              settings.write_text(s)
+          a = app.read_text()
+          if "com.google.gms.google-services" not in a:
+              a = a.replace("plugins {\n", 'plugins {\n    id("com.google.gms.google-services")\n', 1)
+              app.write_text(a)
+          PY
+      - name: Configure Android manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import xml.etree.ElementTree as ET
+          p = Path("admin_app/android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          for permission in [
+              '    <uses-permission android:name="android.permission.INTERNET" />\n',
+              '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n',
+          ]:
+              name = permission.split('"')[1]
+              if name not in s:
+                  s = s.replace("<application", permission + "    <application", 1)
+          metadata = '        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="payment_requests" />\n'
+          if "com.google.firebase.messaging.default_notification_channel_id" not in s:
+              s = s.replace("</application>", metadata + "    </application>", 1)
+          activity = re.search(r"<activity\\b[^>]*>", s)
+          if not activity:
+              raise SystemExit("MainActivity activity not found")
+          tag = activity.group(0)
+          if "android:launchMode=" not in tag:
+              s = s[:activity.start()] + tag[:-1] + ' android:launchMode="singleTop">' + s[activity.end():]
+          intent = '''
+                  <intent-filter>
+                      <action android:name="android.intent.action.VIEW" />
+                      <category android:name="android.intent.category.DEFAULT" />
+                      <category android:name="android.intent.category.BROWSABLE" />
+                      <data android:scheme="weddingvideoshareadmin" android:host="login-callback" />
+                  </intent-filter>
+          '''
+          if 'android:scheme="weddingvideoshareadmin"' not in s:
+              s = s.replace("</activity>", intent + "\\n        </activity>", 1)
+          p.write_text(s)
+          ET.parse(p)
+          PY
+      - name: Build Admin APK
+        working-directory: admin_app
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos
+          flutter build apk --release
+      - name: Upload Admin APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: wedding-video-share-admin-apk
+          path: admin_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
