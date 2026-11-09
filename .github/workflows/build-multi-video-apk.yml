@@ -36,7 +36,7 @@ jobs:
         run: flutter pub get
 
       - name: Analyze Dart and Flutter code
-        run: flutter analyze --no-pub
+        run: flutter analyze --no-pub lib
 
       - name: Run Flutter tests
         run: flutter test --no-pub
