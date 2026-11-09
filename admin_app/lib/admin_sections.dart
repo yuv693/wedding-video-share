@@ -284,7 +284,7 @@ class _AdminSectionPageState extends State<AdminSectionPage> {
               duration: const Duration(seconds: 8),
             ));
           }
-        },,
+        },
       )),
       const SizedBox(height: 16),
       FilledButton.icon(
