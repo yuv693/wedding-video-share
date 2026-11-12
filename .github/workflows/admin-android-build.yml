@@ -27,6 +27,24 @@ jobs:
           if [ ! -f admin_app/android/gradlew ]; then
             flutter create --platforms=android --org com.weddingvideoshare --project-name wedding_video_share_admin admin_app
           fi
+      - name: Use the exact Customer App launcher icon for Admin App
+        run: |
+          set -euo pipefail
+          mkdir -p admin_app/android/app/src/main/res/drawable
+          cp android/app/src/main/res/drawable/wedding_icon.xml admin_app/android/app/src/main/res/drawable/wedding_icon.xml
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("admin_app/android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          import re
+          s, n = re.subn(r'android:icon="@[^"]+"', 'android:icon="@drawable/wedding_icon"', s, count=1)
+          if n == 0:
+              s = s.replace("<application", '<application android:icon="@drawable/wedding_icon"', 1)
+          p.write_text(s)
+          if 'android:icon="@drawable/wedding_icon"' not in s:
+              raise SystemExit("Admin launcher icon was not configured")
+          print("Admin launcher icon now uses the exact Customer App wedding_icon.xml.")
+          PY
       - name: Configure Firebase Android app and Google Services plugin
         run: |
           set -euo pipefail
