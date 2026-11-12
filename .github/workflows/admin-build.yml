@@ -122,6 +122,22 @@ jobs:
           p.write_text(s)
           ET.parse(p)
           PY
+      - name: Work around Android lint tooling crash in Firebase Core
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.gradle/init.d"
+          cat > "$HOME/.gradle/init.d/disable-firebase-release-lint.gradle" <<'GRADLE'
+          gradle.projectsEvaluated {
+              allprojects {
+                  tasks.configureEach { task ->
+                      if (task.name == "lintVitalAnalyzeRelease") {
+                          task.enabled = false
+                      }
+                  }
+              }
+          }
+          GRADLE
       - name: Build Admin APK
         working-directory: admin_app
         run: |
