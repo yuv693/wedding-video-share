@@ -83,17 +83,97 @@ StreamSubscription<String>? adminTokenRefreshSubscription;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+  runApp(const StartupGate());
+}
+
+Future<void> initializeAppServices() async {
+  await Firebase.initializeApp().timeout(const Duration(seconds: 25));
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  await initializePushNotifications();
-  await Supabase.initialize(url: projectUrl, publishableKey: publicKey);
+  await Supabase.initialize(url: projectUrl, publishableKey: publicKey)
+      .timeout(const Duration(seconds: 25));
+
+  // Push notifications are optional for opening the Admin App. Do not block
+  // the first screen while Android notification services initialize.
+  unawaited(initializePushNotifications().catchError((Object error) {
+    debugPrint('Notification initialization: $error');
+  }));
+
   if (Supabase.instance.client.auth.currentSession != null) {
-    try { await registerAdminPushToken(askPermission: true); } catch (error) { debugPrint('Admin notification setup: $error'); }
+    unawaited(registerAdminPushToken(askPermission: true).catchError((Object error) {
+      debugPrint('Admin notification setup: $error');
+      return '';
+    }));
   }
   adminTokenRefreshSubscription ??= FirebaseMessaging.instance.onTokenRefresh.listen((_) {
     unawaited(registerAdminPushToken());
   });
-  runApp(const OwnerConsole());
+}
+
+class StartupGate extends StatefulWidget {
+  const StartupGate({super.key});
+
+  @override
+  State<StartupGate> createState() => _StartupGateState();
+}
+
+class _StartupGateState extends State<StartupGate> {
+  late Future<void> startup;
+
+  @override
+  void initState() {
+    super.initState();
+    startup = initializeAppServices();
+  }
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Owner Console',
+    theme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF6F2438))),
+    home: FutureBuilder<void>(
+      future: startup,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48),
+                    const SizedBox(height: 12),
+                    const Text('App setup could not finish', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text(snapshot.error.toString(), textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: () => setState(() => startup = initializeAppServices()),
+                      child: const Text('Try again'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Starting Owner Console…'),
+                ],
+              ),
+            ),
+          );
+        }
+        return const LoginPage();
+      },
+    ),
+  );
 }
 
 class OwnerConsole extends StatelessWidget {
