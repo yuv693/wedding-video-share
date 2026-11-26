@@ -81,7 +81,8 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
   }
 
   void showQr(Map<String,dynamic> a){
-    final value=guestLinks[a['id'].toString()] ?? '';\n    if(value.isEmpty){setState(()=>error='Publish the guest link first.');return;}
+    final value=guestLinks[a['id'].toString()] ?? '';
+    if(value.isEmpty){setState(()=>error='Publish the guest link first.');return;}
     showDialog<void>(context:context,builder:(ctx)=>AlertDialog(title:Text(a['title'].toString()),content:Column(mainAxisSize:MainAxisSize.min,children:[
       QrImageView(data:value,size:210),
       const Text('Scan to open the private guest album. Access can be revoked by the album owner.',textAlign:TextAlign.center),
