@@ -88,6 +88,47 @@ class _WeddingClipTimelineScreenState extends State<WeddingClipTimelineScreen> {
     });
   }
 
+  Future<void> _editClip(int index) async {
+    final clip = _clips[index];
+    final start = TextEditingController(text: '${clip['trimStartMs'] ?? 0}');
+    final end = TextEditingController(text: '${clip['trimEndMs'] ?? ''}');
+    final speed = TextEditingController(text: '${clip['playbackSpeed'] ?? 1.0}');
+    final formKey = GlobalKey<FormState>();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(clip['name']?.toString() ?? 'Clip settings'),
+        content: Form(
+          key: formKey,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextFormField(controller: start, keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Trim start (milliseconds)'),
+              validator: (v) => int.tryParse(v ?? '') == null || int.parse(v!) < 0 ? 'Enter zero or more' : null),
+            TextFormField(controller: end, keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Trim end (milliseconds, blank = full clip)'),
+              validator: (v) => (v == null || v.trim().isEmpty) ? null :
+                (int.tryParse(v) == null || int.parse(v) <= int.parse(start.text.isEmpty ? '0' : start.text) ? 'Must be after trim start' : null)),
+            TextFormField(controller: speed, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Playback speed (0.5 to 2.0)'),
+              validator: (v) { final n = double.tryParse(v ?? ''); return n == null || n < 0.5 || n > 2 ? 'Use 0.5 to 2.0' : null; }),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () { if (formKey.currentState!.validate()) Navigator.pop(ctx, true); }, child: const Text('Save')),
+        ],
+      ),
+    );
+    if (saved == true && mounted) {
+      setState(() {
+        clip['trimStartMs'] = int.parse(start.text);
+        clip['trimEndMs'] = end.text.trim().isEmpty ? null : int.parse(end.text);
+        clip['playbackSpeed'] = double.parse(speed.text);
+      });
+    }
+    start.dispose(); end.dispose(); speed.dispose();
+  }
+
   Future<void> _save() async {
     setState(() { _saving = true; _error = null; });
     try {
@@ -112,6 +153,7 @@ class _WeddingClipTimelineScreenState extends State<WeddingClipTimelineScreen> {
         'sizeBytes': clip['sizeBytes'],
         'trimStartMs': clip['trimStartMs'] ?? 0,
         'trimEndMs': clip['trimEndMs'],
+        'playbackSpeed': clip['playbackSpeed'] ?? 1.0,
       }).toList();
       timeline['clipOrder'] = _clips.map((clip) => clip['id']).toList();
       timeline['status'] = 'editable_timeline_draft';
@@ -190,11 +232,18 @@ class _WeddingClipTimelineScreenState extends State<WeddingClipTimelineScreen> {
                               subtitle: Text(
                                 clip['path'] == null ? 'Source needs to be selected again' : 'Copied to secure app-private working folder',
                               ),
-                              trailing: IconButton(
-                                tooltip: 'Remove clip',
-                                onPressed: _saving ? null : () => setState(() => _clips.removeAt(index)),
-                                icon: const Icon(Icons.delete_outline),
-                              ),
+                              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                                IconButton(
+                                  tooltip: 'Trim and speed',
+                                  onPressed: _saving ? null : () => _editClip(index),
+                                  icon: const Icon(Icons.tune),
+                                ),
+                                IconButton(
+                                  tooltip: 'Remove clip',
+                                  onPressed: _saving ? null : () => setState(() => _clips.removeAt(index)),
+                                  icon: const Icon(Icons.delete_outline),
+                                ),
+                              ]),
                             ),
                           );
                         },
