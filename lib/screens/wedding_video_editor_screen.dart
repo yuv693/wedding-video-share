@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 import '../services/backend.dart';
 import 'wedding_clip_timeline_screen.dart';
 import 'wedding_audio_timeline_screen.dart';
+import 'wedding_multi_track_export_screen.dart';
 
 class WeddingVideoEditorScreen extends StatefulWidget {
   const WeddingVideoEditorScreen({
@@ -312,6 +313,17 @@ class _WeddingVideoEditorScreenState extends State<WeddingVideoEditorScreen> {
             ),
             icon: const Icon(Icons.video_collection_outlined),
             label: const Text('Manage multi-clip timeline'),
+          ),
+          OutlinedButton.icon(
+            onPressed: _working ? null : () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => WeddingMultiTrackExportScreen(
+                  projectTitle: widget.projectTitle,
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.video_settings_outlined),
+            label: const Text('Try multi-clip + multi-track export beta'),
           ),
           OutlinedButton.icon(
             onPressed: _working ? null : () => Navigator.of(context).push(
