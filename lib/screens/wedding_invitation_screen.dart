@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import '../services/backend.dart';
 
 class WeddingInvitationScreen extends StatefulWidget {
@@ -15,7 +16,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
   Future<void> load() async{
     try{
       final p=await supabase.from('wedding_projects').select('id,title').order('created_at',ascending:false);
-      final rows=await supabase.from('digital_wedding_invitations').select('id,project_id,title,template_key,event_details,rsvp_enabled,published_at,created_at').order('created_at',ascending:false);
+      final rows=await supabase.from('digital_wedding_invitations').select('id,project_id,title,template_key,event_details,rsvp_enabled,published_at,public_slug,created_at').order('created_at',ascending:false);
       if(!mounted)return;
       setState(() { projects=List<Map<String,dynamic>>.from(p); invitations=List<Map<String,dynamic>>.from(rows); });
     }catch(e){error='Could not load invitations: $e';}
@@ -146,6 +147,84 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
     }
   }
 
+  Future<void> publishInvitation(Map<String,dynamic> row) async {
+    setState(() => saving = true);
+    try {
+      final response = await supabase.functions.invoke(
+        'wedding-invitation-public',
+        body: {'action': 'publish', 'invitationId': row['id']},
+      );
+      final data = response.data;
+      if (response.status < 200 || response.status >= 300 || data is! Map || data['ok'] != true) {
+        throw Exception(data is Map ? (data['error'] ?? 'Publish failed') : 'Publish failed');
+      }
+      final link = data['publicUrl']?.toString() ?? '';
+      await load();
+      if (link.isNotEmpty && mounted) {
+        await Share.share(link, subject: 'Wedding invitation');
+      }
+    } catch (e) {
+      if (mounted) setState(() => error = 'Could not publish invitation: $e');
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> unpublishInvitation(Map<String,dynamic> row) async {
+    setState(() => saving = true);
+    try {
+      final response = await supabase.functions.invoke(
+        'wedding-invitation-public',
+        body: {'action': 'unpublish', 'invitationId': row['id']},
+      );
+      final data = response.data;
+      if (response.status < 200 || response.status >= 300 || data is! Map || data['ok'] != true) {
+        throw Exception(data is Map ? (data['error'] ?? 'Unpublish failed') : 'Unpublish failed');
+      }
+      await load();
+    } catch (e) {
+      if (mounted) setState(() => error = 'Could not unpublish invitation: $e');
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
+  }
+
+  Future<void> showRsvpResponses(Map<String,dynamic> row) async {
+    try {
+      final responses = await supabase.from('wedding_invitation_rsvps')
+          .select('guest_name,guest_email,attending,guest_count,message,created_at')
+          .eq('invitation_id', row['id']).order('created_at', ascending: false);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Guest RSVP responses'),
+          content: SizedBox(
+            width: 440,
+            child: responses.isEmpty
+                ? const Text('No guest responses yet.')
+                : ListView(
+                    shrinkWrap: true,
+                    children: responses.map((r) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(r['guest_name']?.toString() ?? 'Guest'),
+                      subtitle: Text([
+                        r['attending'] == true ? 'Attending' : 'Not attending',
+                        'Guests: ${r['guest_count'] ?? 1}',
+                        if ((r['guest_email'] ?? '').toString().isNotEmpty) r['guest_email'].toString(),
+                        if ((r['message'] ?? '').toString().isNotEmpty) r['message'].toString(),
+                      ].join(' • ')),
+                    )).toList(),
+                  ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+        ),
+      );
+    } catch (e) {
+      if (mounted) setState(() => error = 'Could not load RSVP responses: $e');
+    }
+  }
+
   Future<void> toggleRsvp(Map<String,dynamic> row,bool value)async{
     try{await supabase.from('digital_wedding_invitations').update({'rsvp_enabled':value,'updated_at':DateTime.now().toIso8601String()}).eq('id',row['id']);await load();}
     catch(e){if(mounted)setState(()=>error='Could not update RSVP: $e');}
@@ -161,7 +240,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
     appBar:AppBar(title:const Text('Digital Wedding Invitations')),
     body:loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.all(16),children:[
       const Chip(label:Text('Development Mode')),
-      const Text('Create and save invitation drafts with event details, design templates and RSVP settings. Public guest links and live RSVP collection are not enabled yet.'),
+      const Text('Create invitations, publish a private share link, collect guest RSVPs and review responses. This module remains in Development Mode.'),
       const SizedBox(height:12),
       FilledButton.icon(onPressed:saving?null:createInvitation,icon:const Icon(Icons.add),label:Text(saving?'Saving…':'Create invitation draft')),
       if(error!=null)Text(error!,style:const TextStyle(color:Colors.red)),
@@ -175,6 +254,35 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
           if((details['date_time']??'').toString().isNotEmpty)Text('Date: ${details['date_time']}'),
           if((details['venue']??'').toString().isNotEmpty)Text('Venue: ${details['venue']}'),
           SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('RSVP enabled (draft setting)'),value:row['rsvp_enabled']==true,onChanged:(v)=>toggleRsvp(row,v)),
+          if (row['published_at'] == null) ...[
+            FilledButton.icon(
+              onPressed: saving ? null : () => publishInvitation(row),
+              icon: const Icon(Icons.public),
+              label: const Text('Publish share link'),
+            ),
+          ] else ...[
+            Text('Published invitation • Guest link active', style: TextStyle(color: Colors.green.shade700)),
+            Wrap(spacing: 8, children: [
+              OutlinedButton.icon(
+                onPressed: saving ? null : () => Share.share(
+                  '${supabaseUrl}/functions/v1/wedding-invitation-public?slug=${row['public_slug']}',
+                  subject: 'Wedding invitation',
+                ),
+                icon: const Icon(Icons.share_outlined),
+                label: const Text('Share link'),
+              ),
+              OutlinedButton.icon(
+                onPressed: saving ? null : () => showRsvpResponses(row),
+                icon: const Icon(Icons.people_outline),
+                label: const Text('View RSVPs'),
+              ),
+              TextButton.icon(
+                onPressed: saving ? null : () => unpublishInvitation(row),
+                icon: const Icon(Icons.link_off),
+                label: const Text('Unpublish'),
+              ),
+            ]),
+          ],
           Wrap(alignment: WrapAlignment.end, spacing: 8, children: [
             TextButton.icon(onPressed: saving ? null : () => editInvitation(row), icon: const Icon(Icons.edit_outlined), label: const Text('Edit')),
             TextButton.icon(onPressed: saving ? null : () => deleteDraft(row), icon: const Icon(Icons.delete_outline), label: const Text('Delete draft')),
