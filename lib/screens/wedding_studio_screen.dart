@@ -145,12 +145,26 @@ class _WeddingStudioHubState extends State<WeddingStudioHub> {
   }
 
   Widget _comingSoon(IconData icon, String title, String subtitle) {
+    final details = _moduleDetails[title]!;
     return Card(
       child: ListTile(
         leading: Icon(icon, color: const Color(0xFF6F2438)),
         title: Text(title),
         subtitle: Text(subtitle),
-        trailing: const Chip(label: Text('In development')),
+        trailing: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Chip(label: Text('Development mode')),
+            Icon(Icons.chevron_right),
+          ],
+        ),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => WeddingStudioModuleScreen(
+            title: title,
+            description: subtitle,
+            features: details,
+          ),
+        )),
       ),
     );
   }
@@ -315,6 +329,134 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
                 subtitle: Text('This draft stores only timeline metadata and notes. It does not copy or delete your source videos.'),
               )),
             ]),
+    );
+  }
+}
+
+
+const Map<String, List<String>> _moduleDetails = {
+  'QR Wedding Album': [
+    'Create a private wedding album and its unique QR code',
+    'Let invited guests upload and view photos/videos',
+    'Choose guest upload, viewing and download permissions',
+    'Protect album access with a private link or PIN',
+  ],
+  'Photographer Studio Portal': [
+    'Create a photographer or studio profile',
+    'Manage separate customer wedding projects',
+    'Invite customers and hand over uploaded media',
+    'Track album and editing project status',
+  ],
+  'AI Wedding Highlights': [
+    'Analyse selected wedding clips for highlight moments',
+    'Prepare a suggested highlights sequence',
+    'Preview and approve suggestions before export',
+    'Keep original customer media unchanged',
+  ],
+  'Digital Invitations': [
+    'Choose and personalise a wedding invitation template',
+    'Add couple names, dates, venue and event details',
+    'Create a shareable invitation with RSVP/contact details',
+    'Add a map/location link for guests',
+  ],
+  'Wedding Reels': [
+    'Prepare vertical 9:16 wedding reel projects',
+    'Choose entry, ceremony, family or teaser presets',
+    'Add captions, text and a cover before preview',
+    'Export a reel for the customer to share',
+  ],
+  'Instagram Connection': [
+    'Connect an eligible Instagram professional/creator account using official Meta sign-in',
+    'Never request or store an Instagram password',
+    'Review the reel and approve each publish action',
+    'Direct publishing depends on Meta permissions and app approval',
+  ],
+  'Admin & Billing': [
+    'View wedding projects and module status',
+    'Review payment records and reconciliation',
+    'Track customer support and audit events',
+    'Manage plans and storage/quota visibility',
+  ],
+};
+
+class WeddingStudioModuleScreen extends StatelessWidget {
+  const WeddingStudioModuleScreen({
+    super.key,
+    required this.title,
+    required this.description,
+    required this.features,
+  });
+
+  final String title;
+  final String description;
+  final List<String> features;
+
+  @override
+  Widget build(BuildContext context) {
+    const burgundy = Color(0xFF6F2438);
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Card(
+            color: const Color(0xFFF4EAE6),
+            elevation: 0,
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.construction_outlined, color: burgundy),
+                      SizedBox(width: 8),
+                      Text(
+                        'Development mode',
+                        style: TextStyle(
+                          color: burgundy,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(description),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'Planned module features',
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          ...features.map((feature) => Card(
+            child: ListTile(
+              leading: const Icon(Icons.check_circle_outline, color: burgundy),
+              title: Text(feature),
+            ),
+          )),
+          const SizedBox(height: 12),
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(14),
+              child: Text(
+                'This module opens in the app, but its full workflows are not enabled yet. It will remain in Development Mode until implementation and testing are complete. No customer-facing release is active.',
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
