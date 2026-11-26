@@ -18,7 +18,7 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
       final p=await supabase.from('wedding_projects').select('id,title').order('created_at',ascending:false);
       final a=await supabase.from('wedding_albums').select('id,title,guest_uploads_enabled,guest_view_enabled,downloads_enabled,revoked_at,created_at').order('created_at',ascending:false);
       if(!mounted)return;
-      setState(()=>{projects=List<Map<String,dynamic>>.from(p),albums=List<Map<String,dynamic>>.from(a)});
+      setState(() { projects=List<Map<String,dynamic>>.from(p); albums=List<Map<String,dynamic>>.from(a); });
     } catch(e){error='Could not load albums: $e';}
     finally{if(mounted)setState(()=>loading=false);}
   }
