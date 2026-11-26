@@ -209,7 +209,7 @@ class _WeddingStudioAdminScreenState extends State<WeddingStudioAdminScreen> {
                           title: Text(_rupees(p['amount_paise'])),
                           subtitle: Text('${p['customerEmail'] ?? 'Customer'} • ${p['gateway'] ?? ''}'),
                           trailing: pendingManual
-                              ? Wrap(mainAxisSize: MainAxisSize.min, children: [
+                              ? Row(mainAxisSize: MainAxisSize.min, children: [
                                   IconButton(tooltip: 'Approve ₹290', onPressed: () => _reviewPayment(p, 'approve'), icon: const Icon(Icons.check_circle_outline, color: Colors.green)),
                                   IconButton(tooltip: 'Reject payment', onPressed: () => _reviewPayment(p, 'reject'), icon: const Icon(Icons.cancel_outlined, color: Colors.red)),
                                 ])
