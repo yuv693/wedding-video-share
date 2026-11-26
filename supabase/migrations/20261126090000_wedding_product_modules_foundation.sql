@@ -180,6 +180,24 @@ alter table public.wedding_reel_exports enable row level security;
 alter table public.wedding_billing_events enable row level security;
 alter table public.wedding_audit_events enable row level security;
 
+-- Supabase no longer exposes newly-created public tables through the Data API
+-- by default. Grant only the client privileges that are also constrained by RLS.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table
+  public.wedding_projects,
+  public.photographer_studios,
+  public.wedding_albums,
+  public.wedding_album_items,
+  public.wedding_editor_projects,
+  public.wedding_ai_highlight_jobs,
+  public.digital_wedding_invitations,
+  public.wedding_reel_exports
+to authenticated;
+grant select on table
+  public.wedding_billing_events,
+  public.wedding_audit_events
+to authenticated;
+
 create policy "customers manage own wedding projects"
 on public.wedding_projects for all to authenticated
 using (owner_customer_id = auth.uid())
