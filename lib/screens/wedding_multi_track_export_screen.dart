@@ -9,9 +9,16 @@ import 'package:share_plus/share_plus.dart';
 /// Experimental on-device render path for ordered clips and independent audio tracks.
 /// Source media remains on-device; only the finished export can be shared by the customer.
 class WeddingMultiTrackExportScreen extends StatefulWidget {
-  const WeddingMultiTrackExportScreen({super.key, required this.projectTitle});
+  const WeddingMultiTrackExportScreen({
+    super.key,
+    required this.projectTitle,
+    this.initialClips = const [],
+    this.initialAudioTracks = const [],
+  });
 
   final String projectTitle;
+  final List<Map<String, dynamic>> initialClips;
+  final List<Map<String, dynamic>> initialAudioTracks;
 
   @override
   State<WeddingMultiTrackExportScreen> createState() =>
@@ -29,6 +36,37 @@ class _WeddingMultiTrackExportScreenState
   double _progress = 0;
   String? _outputPath;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final clip in widget.initialClips) {
+      final path = clip['path']?.toString();
+      if (path == null || !File(path).existsSync()) continue;
+      _clips.add(PlatformFile(
+        name: clip['name']?.toString() ?? 'Wedding clip',
+        size: (clip['sizeBytes'] as num?)?.toInt() ?? File(path).lengthSync(),
+        path: path,
+      ));
+    }
+    for (final track in widget.initialAudioTracks) {
+      final path = track['path']?.toString();
+      if (path == null || !File(path).existsSync()) continue;
+      _tracks.add(PlatformFile(
+        name: track['name']?.toString() ?? 'Music track',
+        size: File(path).lengthSync(),
+        path: path,
+      ));
+      _trackSettings[path] = {
+        'startAtMs': (track['startAtMs'] as num?)?.toInt() ?? 0,
+        'trimStartMs': (track['trimStartMs'] as num?)?.toInt() ?? 0,
+        'trimEndMs': (track['trimEndMs'] as num?)?.toInt(),
+        'volume': (track['volume'] as num?)?.toDouble() ?? 1.0,
+        'fadeInMs': (track['fadeInMs'] as num?)?.toInt() ?? 0,
+        'fadeOutMs': (track['fadeOutMs'] as num?)?.toInt() ?? 0,
+      };
+    }
+  }
 
   Future<void> _pickClips() async {
     final result = await FilePicker.platform.pickFiles(
