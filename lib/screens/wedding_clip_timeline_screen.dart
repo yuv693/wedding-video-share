@@ -108,6 +108,7 @@ class _WeddingClipTimelineScreenState extends State<WeddingClipTimelineScreen> {
       timeline['clips'] = _clips.map((clip) => {
         'id': clip['id'],
         'name': clip['name'],
+        'path': clip['path'],
         'sizeBytes': clip['sizeBytes'],
         'trimStartMs': clip['trimStartMs'] ?? 0,
         'trimEndMs': clip['trimEndMs'],
