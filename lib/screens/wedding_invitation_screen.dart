@@ -42,7 +42,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
           DropdownMenuItem(value:'Buddhist',child:Text('Buddhist')),
           DropdownMenuItem(value:'Parsi',child:Text('Parsi')),
           DropdownMenuItem(value:'Other',child:Text('Other / Custom')),
-        ],onChanged:(v){if(v!=null)refresh(()=>{community=v;template=switch(v){'Hindu'=>'hindu_traditional','Muslim'=>'muslim_nikah','Sikh'=>'sikh_anand_karaj','Christian'=>'christian_classic','Jain'=>'jain_traditional','Buddhist'=>'buddhist_traditional','Parsi'=>'parsi_traditional',_=>'custom_minimal'};});}),
+        ],onChanged:(v){if(v!=null)refresh((){community=v;template=switch(v){'Hindu'=>'hindu_traditional','Muslim'=>'muslim_nikah','Sikh'=>'sikh_anand_karaj','Christian'=>'christian_classic','Jain'=>'jain_traditional','Buddhist'=>'buddhist_traditional','Parsi'=>'parsi_traditional',_=>'custom_minimal'};});}),
         DropdownButtonFormField<String>(value:template,decoration:const InputDecoration(labelText:'Invitation design'),items:const [
           DropdownMenuItem(value:'hindu_traditional',child:Text('Hindu traditional')),
           DropdownMenuItem(value:'muslim_nikah',child:Text('Muslim Nikah')),
@@ -105,6 +105,12 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 TextField(controller: title, decoration: const InputDecoration(labelText: 'Invitation title')),
+                DropdownButtonFormField<String>(
+                  value: community,
+                  decoration: const InputDecoration(labelText: 'Community / tradition'),
+                  items: const ['Hindu','Muslim','Sikh','Christian','Jain','Buddhist','Parsi','Other'].map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                  onChanged: (v) { if (v != null) refresh(() { community = v; }); },
+                ),
                 DropdownButtonFormField<String>(
                   value: template,
                   decoration: const InputDecoration(labelText: 'Design template'),
