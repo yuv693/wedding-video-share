@@ -4,6 +4,7 @@ import '../services/backend.dart';
 import 'wedding_video_editor_screen.dart';
 import 'wedding_qr_album_screen.dart';
 import 'wedding_invitation_screen.dart';
+import 'photographer_studio_portal_screen.dart';
 
 class WeddingStudioHub extends StatefulWidget {
   const WeddingStudioHub({super.key});
@@ -165,7 +166,9 @@ class _WeddingStudioHubState extends State<WeddingStudioHub> {
               ? const WeddingQrAlbumScreen()
               : title == 'Digital Invitations'
                   ? const WeddingInvitationScreen()
-                  : WeddingStudioModuleScreen(
+                  : title == 'Photographer Studio Portal'
+                      ? const PhotographerStudioPortalScreen()
+                      : WeddingStudioModuleScreen(
                   title: title,
                   description: subtitle,
                   features: details,
