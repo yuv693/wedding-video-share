@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 
 import '../services/backend.dart';
@@ -59,17 +62,28 @@ class _WeddingAudioTimelineScreenState extends State<WeddingAudioTimelineScreen>
       withData: false,
     );
     if (result == null || result.files.isEmpty) return;
-    final additions = result.files.map((file) => <String, dynamic>{
-      'id': 'audio-${DateTime.now().microsecondsSinceEpoch}-${file.name.hashCode}',
-      'name': file.name,
-      'path': file.path,
-      'startAtMs': 0,
-      'trimStartMs': 0,
-      'trimEndMs': null,
-      'volume': 1.0,
-      'fadeInMs': 0,
-      'fadeOutMs': 0,
-    }).toList();
+    final directory = await getApplicationDocumentsDirectory();
+    final cache = Directory('${directory.path}/wedding_media/${widget.projectId}/audio');
+    await cache.create(recursive: true);
+    final additions = <Map<String, dynamic>>[];
+    for (final file in result.files) {
+      final source = file.path;
+      if (source == null) continue;
+      final local = await File(source).copy(
+        '${cache.path}/${DateTime.now().microsecondsSinceEpoch}_${file.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')}',
+      );
+      additions.add({
+        'id': 'audio-${DateTime.now().microsecondsSinceEpoch}-${file.name.hashCode}',
+        'name': file.name,
+        'path': local.path,
+        'startAtMs': 0,
+        'trimStartMs': 0,
+        'trimEndMs': null,
+        'volume': 1.0,
+        'fadeInMs': 0,
+        'fadeOutMs': 0,
+      });
+    }
     if (!mounted) return;
     setState(() {
       _tracks.addAll(additions);
@@ -97,6 +111,7 @@ class _WeddingAudioTimelineScreenState extends State<WeddingAudioTimelineScreen>
       timeline['audioTracks'] = _tracks.map((track) => {
         'id': track['id'],
         'name': track['name'],
+        'path': track['path'],
         'startAtMs': track['startAtMs'] ?? 0,
         'trimStartMs': track['trimStartMs'] ?? 0,
         'trimEndMs': track['trimEndMs'],
@@ -105,7 +120,7 @@ class _WeddingAudioTimelineScreenState extends State<WeddingAudioTimelineScreen>
         'fadeOutMs': track['fadeOutMs'] ?? 0,
       }).toList();
       timeline['audioTimelineStatus'] = 'editable_audio_timeline_draft';
-      timeline['audioMediaNote'] = 'Audio source paths are kept on this device and are not uploaded. Re-select audio files after reinstall or on another device.';
+      timeline['audioMediaNote'] = 'Audio working copies are stored in this app private folder for timeline rendering. Original music files remain unchanged.';
       final payload = {
         'project_id': widget.projectId,
         'owner_customer_id': user.id,
