@@ -38,7 +38,7 @@ class _WeddingAiHighlightsScreenState extends State<WeddingAiHighlightsScreen>{
       for(var i=0;i<available.length;i++){
         final clip=available[i],path=clip['path'].toString();
         final video=EditorVideo.file(File(path));
-        final metadata=await ProVideoEditor.instance.getMetadata(video:video);
+        final metadata=await ProVideoEditor.instance.getMetadata(video);
         final duration=metadata.duration.inMilliseconds;
         if(duration<500)continue;
         final times=[(duration*.2).round(),(duration*.5).round(),(duration*.8).round()].toSet().toList();
