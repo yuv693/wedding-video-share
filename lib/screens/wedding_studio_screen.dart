@@ -11,6 +11,7 @@ import 'wedding_multi_track_export_screen.dart';
 import 'wedding_studio_admin_screen.dart';
 import 'wedding_reels_screen.dart';
 import 'wedding_ai_highlights_screen.dart';
+import 'wedding_support_screen.dart';
 
 class WeddingStudioHub extends StatefulWidget {
   const WeddingStudioHub({super.key});
@@ -377,6 +378,13 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
                     )),
                     icon: const Icon(Icons.auto_awesome),
                     label: const Text('AI Wedding Highlights'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _saving ? null : () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => WeddingSupportScreen(projectId: widget.projectId),
+                    )),
+                    icon: const Icon(Icons.support_agent_outlined),
+                    label: const Text('Contact Wedding Studio Support'),
                   ),
                   const SizedBox(height: 8),
                   TextField(
