@@ -116,18 +116,6 @@ jobs:
       - name: Build installable Android APK
         run: flutter build apk --release
 
-      - name: Install and launch APK on Android emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          profile: pixel_6
-          script: |
-            adb install build/app/outputs/flutter-apk/app-release.apk
-            adb shell monkey -p com.weddingvideoshare.app 1
-            sleep 8
-            adb shell pidof com.weddingvideoshare.app
-
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v4
         with:
@@ -141,6 +129,18 @@ jobs:
           name: wedding-video-share-android-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+      - name: Install and launch APK on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            adb install build/app/outputs/flutter-apk/app-release.apk
+            adb shell monkey -p com.weddingvideoshare.app 1
+            sleep 8
+            adb shell pidof com.weddingvideoshare.app
 
       - name: Publish direct-install Customer APK on GitHub Releases
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
