@@ -8,6 +8,7 @@ import 'photographer_studio_portal_screen.dart';
 import 'wedding_clip_timeline_screen.dart';
 import 'wedding_audio_timeline_screen.dart';
 import 'wedding_multi_track_export_screen.dart';
+import 'wedding_studio_admin_screen.dart';
 
 class WeddingStudioHub extends StatefulWidget {
   const WeddingStudioHub({super.key});
@@ -171,7 +172,9 @@ class _WeddingStudioHubState extends State<WeddingStudioHub> {
                   ? const WeddingInvitationScreen()
                   : title == 'Photographer Studio Portal'
                       ? const PhotographerStudioPortalScreen()
-                      : WeddingStudioModuleScreen(
+                      : title == 'Admin & Billing'
+                          ? const WeddingStudioAdminScreen()
+                          : WeddingStudioModuleScreen(
                   title: title,
                   description: subtitle,
                   features: details,
