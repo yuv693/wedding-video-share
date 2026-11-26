@@ -30,6 +30,7 @@ class _WeddingMultiTrackExportScreenState
   final List<PlatformFile> _clips = [];
   final List<PlatformFile> _tracks = [];
   final Map<String, Map<String, dynamic>> _trackSettings = {};
+  final Map<String, Map<String, dynamic>> _clipSettings = {};
   bool _useDissolve = true;
   bool _warmFilter = false;
   bool _working = false;
@@ -48,6 +49,7 @@ class _WeddingMultiTrackExportScreenState
         size: (clip['sizeBytes'] as num?)?.toInt() ?? File(path).lengthSync(),
         path: path,
       ));
+      _clipSettings[path] = Map<String, dynamic>.from(clip);
     }
     for (final track in widget.initialAudioTracks) {
       final path = track['path']?.toString();
@@ -80,6 +82,11 @@ class _WeddingMultiTrackExportScreenState
       _clips
         ..clear()
         ..addAll(valid);
+      _clipSettings
+        ..clear()
+        ..addEntries(valid.where((f) => f.path != null).map((f) => MapEntry(f.path!, {
+          'trimStartMs': 0, 'trimEndMs': null, 'playbackSpeed': 1.0,
+        })));
       _outputPath = null;
       _error = null;
     });
@@ -127,8 +134,15 @@ class _WeddingMultiTrackExportScreenState
           final path = clip.path;
           if (path == null) throw StateError('A selected clip is no longer available.');
           final index = _clips.indexOf(clip);
+          final settings = _clipSettings[path] ?? const <String, dynamic>{};
+          final trimStart = (settings['trimStartMs'] as num?)?.toInt() ?? 0;
+          final trimEnd = (settings['trimEndMs'] as num?)?.toInt();
+          final speed = (settings['playbackSpeed'] as num?)?.toDouble() ?? 1.0;
           return VideoSegment(
             video: EditorVideo.file(File(path)),
+            startTime: Duration(milliseconds: trimStart),
+            endTime: trimEnd == null ? null : Duration(milliseconds: trimEnd),
+            playbackSpeed: speed,
             transition: _useDissolve && index < _clips.length - 1
                 ? const ClipTransition(
                     type: ClipTransitionType.dissolve,
