@@ -22,6 +22,9 @@ class _WeddingMultiTrackExportScreenState
     extends State<WeddingMultiTrackExportScreen> {
   final List<PlatformFile> _clips = [];
   final List<PlatformFile> _tracks = [];
+  final Map<String, Map<String, dynamic>> _trackSettings = {};
+  bool _useDissolve = true;
+  bool _warmFilter = false;
   bool _working = false;
   double _progress = 0;
   String? _outputPath;
@@ -56,6 +59,12 @@ class _WeddingMultiTrackExportScreenState
       _tracks
         ..clear()
         ..addAll(valid);
+      _trackSettings
+        ..clear()
+        ..addEntries(valid.where((f) => f.path != null).map((f) => MapEntry(f.path!, {
+          'startAtMs': 0, 'trimStartMs': 0, 'trimEndMs': null,
+          'volume': 1.0, 'fadeInMs': 0, 'fadeOutMs': 0,
+        })));
       _outputPath = null;
       _error = null;
     });
@@ -79,14 +88,44 @@ class _WeddingMultiTrackExportScreenState
         videoSegments: _clips.map((clip) {
           final path = clip.path;
           if (path == null) throw StateError('A selected clip is no longer available.');
-          return VideoSegment(video: EditorVideo.file(File(path)));
+          final index = _clips.indexOf(clip);
+          return VideoSegment(
+            video: EditorVideo.file(File(path)),
+            transition: _useDissolve && index < _clips.length - 1
+                ? const ClipTransition(
+                    type: ClipTransitionType.dissolve,
+                    duration: Duration(milliseconds: 600),
+                    curve: AnimationCurve.easeInOut,
+                  )
+                : null,
+          );
         }).toList(),
         audioTracks: _tracks.map((track) {
           final path = track.path;
           if (path == null) throw StateError('A selected audio track is no longer available.');
-          return VideoAudioTrack(path: path, volume: 1.0);
+          final settings = _trackSettings[path] ?? const <String, dynamic>{};
+          final trimStart = (settings['trimStartMs'] as int?) ?? 0;
+          final trimEnd = settings['trimEndMs'] as int?;
+          final startAt = (settings['startAtMs'] as int?) ?? 0;
+          final fadeIn = (settings['fadeInMs'] as int?) ?? 0;
+          final fadeOut = (settings['fadeOutMs'] as int?) ?? 0;
+          return VideoAudioTrack(
+            path: path,
+            volume: (settings['volume'] as num?)?.toDouble() ?? 1.0,
+            startTime: Duration(milliseconds: startAt),
+            audioStartTime: Duration(milliseconds: trimStart),
+            audioEndTime: trimEnd == null ? null : Duration(milliseconds: trimEnd),
+            fadeInDuration: Duration(milliseconds: fadeIn),
+            fadeOutDuration: Duration(milliseconds: fadeOut),
+          );
         }).toList(),
         outputFormat: VideoOutputFormat.mp4,
+        colorFilters: _warmFilter ? const [ColorFilter(matrix: [
+          1.08, 0, 0, 0, 0.02,
+          0, 1.02, 0, 0, 0.01,
+          0, 0, 0.92, 0, 0,
+          0, 0, 0, 1, 0,
+        ])] : const [],
       );
       final subscription = ProVideoEditor.instance.progressStream.listen((event) {
         if (mounted) setState(() => _progress = event.progress.clamp(0.0, 1.0));
@@ -108,6 +147,75 @@ class _WeddingMultiTrackExportScreenState
     }
   }
 
+  Future<void> _editTrack(PlatformFile track) async {
+    final path = track.path;
+    if (path == null) return;
+    final current = Map<String, dynamic>.from(_trackSettings[path] ?? {
+      'startAtMs': 0, 'trimStartMs': 0, 'trimEndMs': null,
+      'volume': 1.0, 'fadeInMs': 0, 'fadeOutMs': 0,
+    });
+    final start = TextEditingController(text: '${current['startAtMs']}');
+    final trimStart = TextEditingController(text: '${current['trimStartMs']}');
+    final trimEnd = TextEditingController(text: '${current['trimEndMs'] ?? ''}');
+    final fadeIn = TextEditingController(text: '${current['fadeInMs']}');
+    final fadeOut = TextEditingController(text: '${current['fadeOutMs']}');
+    double volume = (current['volume'] as num).toDouble();
+    final formKey = GlobalKey<FormState>();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(builder: (context, setDialogState) => AlertDialog(
+        title: Text(track.name),
+        content: Form(
+          key: formKey,
+          child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+            _timeField(start, 'Start at (ms)'),
+            _timeField(trimStart, 'Trim from (ms)'),
+            _timeField(trimEnd, 'Trim end (ms, optional)', optional: true),
+            _timeField(fadeIn, 'Fade in (ms)'),
+            _timeField(fadeOut, 'Fade out (ms)'),
+            Text('Volume ${(volume * 100).round()}%'),
+            Slider(value: volume.clamp(0, 1), min: 0, max: 1, divisions: 20,
+              onChanged: (value) => setDialogState(() => volume = value)),
+          ])),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () {
+            if (formKey.currentState!.validate()) Navigator.pop(context, true);
+          }, child: const Text('Save')),
+        ],
+      )),
+    );
+    if (saved == true && mounted) {
+      setState(() {
+        _trackSettings[path] = {
+          'startAtMs': int.parse(start.text),
+          'trimStartMs': int.parse(trimStart.text),
+          'trimEndMs': trimEnd.text.trim().isEmpty ? null : int.parse(trimEnd.text),
+          'fadeInMs': int.parse(fadeIn.text),
+          'fadeOutMs': int.parse(fadeOut.text),
+          'volume': volume,
+        };
+        _outputPath = null;
+      });
+    }
+  }
+
+  Widget _timeField(TextEditingController controller, String label, {bool optional = false}) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: TextFormField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+      validator: (value) {
+        if (optional && (value == null || value.trim().isEmpty)) return null;
+        final number = int.tryParse(value ?? '');
+        if (number == null || number < 0) return 'Enter zero or a positive number';
+        return null;
+      },
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -126,22 +234,61 @@ class _WeddingMultiTrackExportScreenState
             icon: const Icon(Icons.video_library_outlined),
             label: Text('Choose video clips (${_clips.length})'),
           ),
-          ..._clips.map((clip) => ListTile(
-            dense: true,
-            leading: const Icon(Icons.movie_outlined),
-            title: Text(clip.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-          )),
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _clips.length,
+            onReorder: (oldIndex, newIndex) {
+              setState(() {
+                if (newIndex > oldIndex) newIndex--;
+                final item = _clips.removeAt(oldIndex);
+                _clips.insert(newIndex, item);
+                _outputPath = null;
+              });
+            },
+            itemBuilder: (context, index) => ListTile(
+              key: ValueKey('clip-${_clips[index].path}'),
+              dense: true,
+              leading: const Icon(Icons.drag_handle),
+              title: Text(_clips[index].name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text('Clip ${index + 1} · drag to reorder'),
+            ),
+          ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: _working ? null : _pickTracks,
             icon: const Icon(Icons.library_music_outlined),
             label: Text('Choose music tracks (${_tracks.length})'),
           ),
-          ..._tracks.map((track) => ListTile(
-            dense: true,
-            leading: const Icon(Icons.music_note_outlined),
-            title: Text(track.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-          )),
+          ..._tracks.map((track) {
+            final path = track.path!;
+            final settings = _trackSettings[path] ?? const <String, dynamic>{};
+            final volume = ((settings['volume'] as num?)?.toDouble() ?? 1) * 100;
+            return ListTile(
+              dense: true,
+              leading: const Icon(Icons.music_note_outlined),
+              title: Text(track.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text('Start ${(settings['startAtMs'] ?? 0)} ms · ${volume.round()}% volume'),
+              trailing: IconButton(
+                tooltip: 'Edit track timing and volume',
+                icon: const Icon(Icons.tune),
+                onPressed: _working ? null : () => _editTrack(track),
+              ),
+            );
+          }),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _useDissolve,
+            onChanged: _working ? null : (value) => setState(() { _useDissolve = value; _outputPath = null; }),
+            title: const Text('Dissolve transitions between clips'),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _warmFilter,
+            onChanged: _working ? null : (value) => setState(() { _warmFilter = value; _outputPath = null; }),
+            title: const Text('Warm wedding colour filter'),
+          ),
           const SizedBox(height: 16),
           FilledButton.icon(
             onPressed: _working ? null : _export,
@@ -172,7 +319,7 @@ class _WeddingMultiTrackExportScreenState
           ],
           const SizedBox(height: 12),
           const Text(
-            'Beta note: this first render path joins clips and mixes full-length audio tracks. Per-track trim, start offsets, fades, transitions, timed effects and text overlays will be wired to the saved timeline in the next pass. Selected source files are not uploaded.',
+            'This on-device beta applies clip order, dissolve transitions, a warm colour filter, and per-track start, trim, volume and fade settings. Source files stay on this device; only the exported MP4 can be shared.',
             style: TextStyle(fontSize: 12),
           ),
         ],
