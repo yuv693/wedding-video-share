@@ -181,8 +181,21 @@ class _WeddingVideoEditorScreenState extends State<WeddingVideoEditorScreen> {
     try {
       final user = supabase.auth.currentUser;
       if (user == null) return;
-      final data = {
-        'version': 2,
+      final existing = await supabase
+          .from('wedding_editor_projects')
+          .select('id,timeline_json')
+          .eq('project_id', widget.projectId)
+          .order('updated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      // Merge export settings into the saved timeline. Do not replace the
+      // clips/audioTracks created by their dedicated timeline screens.
+      final previous = existing?['timeline_json'];
+      final data = previous is Map
+          ? Map<String, dynamic>.from(previous)
+          : <String, dynamic>{};
+      data.addAll({
+        'version': 5,
         'sourceName': _videoName,
         'musicName': _musicName,
         'trimStartMs': _trim.start.round(),
@@ -190,16 +203,9 @@ class _WeddingVideoEditorScreenState extends State<WeddingVideoEditorScreen> {
         'sourceDurationMs': _duration.inMilliseconds,
         'speedMultiplier': _speed,
         'exportedAt': DateTime.now().toIso8601String(),
-        'status': 'exported_local_draft',
-        'note': 'Local media paths are not uploaded. Re-select original files to edit again on this device.',
-      };
-      final existing = await supabase
-          .from('wedding_editor_projects')
-          .select('id')
-          .eq('project_id', widget.projectId)
-          .order('updated_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
+        'exportStatus': 'exported_local_draft',
+        'exportNote': 'Local media paths are not uploaded. Re-select original files to edit again on this device.',
+      });
       final payload = {
         'project_id': widget.projectId,
         'owner_customer_id': user.id,
