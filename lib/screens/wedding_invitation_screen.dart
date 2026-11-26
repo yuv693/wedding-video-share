@@ -17,7 +17,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
       final p=await supabase.from('wedding_projects').select('id,title').order('created_at',ascending:false);
       final rows=await supabase.from('digital_wedding_invitations').select('id,project_id,title,template_key,event_details,rsvp_enabled,published_at,created_at').order('created_at',ascending:false);
       if(!mounted)return;
-      setState(()=>{projects=List<Map<String,dynamic>>.from(p),invitations=List<Map<String,dynamic>>.from(rows)});
+      setState(() { projects=List<Map<String,dynamic>>.from(p); invitations=List<Map<String,dynamic>>.from(rows); });
     }catch(e){error='Could not load invitations: $e';}
     finally{if(mounted)setState(()=>loading=false);}
   }
