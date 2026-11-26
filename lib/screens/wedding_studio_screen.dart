@@ -269,7 +269,7 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
                     projectTitle: widget.projectTitle,
                   ),
                 )),
-                icon: const Icon(Icons.movie_edit_outlined),
+                icon: const Icon(Icons.movie_creation_outlined),
                 label: const Text('Open Wedding Video Editor'),
                 style: FilledButton.styleFrom(backgroundColor: burgundy),
               ),
