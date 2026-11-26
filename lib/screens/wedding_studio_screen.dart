@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/backend.dart';
+import 'wedding_video_editor_screen.dart';
 
 class WeddingStudioHub extends StatefulWidget {
   const WeddingStudioHub({super.key});
@@ -257,8 +258,20 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
           : ListView(padding: const EdgeInsets.all(20), children: [
               const Text('Editable timeline draft', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
-              const Text('This saves your editing plan only. Real clip trimming, music mixing, transitions and video export are not enabled yet.'),
+              const Text('Open the on-device editor beta to trim a video, preview it, change speed, replace its soundtrack and export a new copy.'),
               const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => WeddingVideoEditorScreen(
+                    projectId: widget.projectId,
+                    projectTitle: widget.projectTitle,
+                  ),
+                )),
+                icon: const Icon(Icons.movie_edit_outlined),
+                label: const Text('Open Wedding Video Editor'),
+                style: FilledButton.styleFrom(backgroundColor: burgundy),
+              ),
+              const SizedBox(height: 12),
               Card(child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
