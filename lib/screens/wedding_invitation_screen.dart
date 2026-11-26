@@ -61,6 +61,91 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
     }catch(e){if(mounted)setState(()=>error='Save failed: $e');}
     finally{for(final c in [title,bride,groom,venue,date,contact,map]){c.dispose();}if(mounted)setState(()=>saving=false);}
   }
+  Future<void> editInvitation(Map<String,dynamic> row) async {
+    final details = row['event_details'] is Map
+        ? Map<String,dynamic>.from(row['event_details'] as Map)
+        : <String,dynamic>{};
+    final title = TextEditingController(text: row['title']?.toString() ?? '');
+    final bride = TextEditingController(text: details['bride']?.toString() ?? '');
+    final groom = TextEditingController(text: details['groom']?.toString() ?? '');
+    final date = TextEditingController(text: details['date_time']?.toString() ?? '');
+    final venue = TextEditingController(text: details['venue']?.toString() ?? '');
+    final map = TextEditingController(text: details['map_link']?.toString() ?? '');
+    final contact = TextEditingController(text: details['rsvp_contact']?.toString() ?? '');
+    String template = row['template_key']?.toString() ?? 'classic_floral';
+    bool rsvp = row['rsvp_enabled'] == true;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, refresh) => AlertDialog(
+          title: const Text('Edit invitation draft'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                TextField(controller: title, decoration: const InputDecoration(labelText: 'Invitation title')),
+                DropdownButtonFormField<String>(
+                  value: template,
+                  decoration: const InputDecoration(labelText: 'Design template'),
+                  items: const [
+                    DropdownMenuItem(value: 'classic_floral', child: Text('Classic floral')),
+                    DropdownMenuItem(value: 'royal', child: Text('Royal')),
+                    DropdownMenuItem(value: 'minimal', child: Text('Minimal')),
+                    DropdownMenuItem(value: 'traditional', child: Text('Traditional')),
+                  ],
+                  onChanged: (v) { if (v != null) refresh(() => template = v); },
+                ),
+                TextField(controller: bride, decoration: const InputDecoration(labelText: 'Bride name')),
+                TextField(controller: groom, decoration: const InputDecoration(labelText: 'Groom name')),
+                TextField(controller: date, decoration: const InputDecoration(labelText: 'Event date and time')),
+                TextField(controller: venue, decoration: const InputDecoration(labelText: 'Venue')),
+                TextField(controller: map, decoration: const InputDecoration(labelText: 'Map link (optional)')),
+                TextField(controller: contact, decoration: const InputDecoration(labelText: 'RSVP contact (optional)')),
+                SwitchListTile(
+                  value: rsvp,
+                  title: const Text('Enable RSVP (draft setting)'),
+                  contentPadding: EdgeInsets.zero,
+                  onChanged: (v) => refresh(() => rsvp = v),
+                ),
+              ]),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save changes')),
+          ],
+        ),
+      ),
+    );
+    if (ok == true) {
+      setState(() => saving = true);
+      try {
+        await supabase.from('digital_wedding_invitations').update({
+          'title': title.text.trim().isEmpty ? 'Wedding Invitation' : title.text.trim(),
+          'template_key': template,
+          'rsvp_enabled': rsvp,
+          'event_details': {
+            'bride': bride.text.trim(),
+            'groom': groom.text.trim(),
+            'date_time': date.text.trim(),
+            'venue': venue.text.trim(),
+            'map_link': map.text.trim(),
+            'rsvp_contact': contact.text.trim(),
+          },
+          'updated_at': DateTime.now().toIso8601String(),
+        }).eq('id', row['id']);
+        await load();
+      } catch (e) {
+        if (mounted) setState(() => error = 'Could not update invitation: $e');
+      } finally {
+        if (mounted) setState(() => saving = false);
+      }
+    }
+    for (final c in [title, bride, groom, date, venue, map, contact]) {
+      c.dispose();
+    }
+  }
+
   Future<void> toggleRsvp(Map<String,dynamic> row,bool value)async{
     try{await supabase.from('digital_wedding_invitations').update({'rsvp_enabled':value,'updated_at':DateTime.now().toIso8601String()}).eq('id',row['id']);await load();}
     catch(e){if(mounted)setState(()=>error='Could not update RSVP: $e');}
@@ -90,7 +175,10 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
           if((details['date_time']??'').toString().isNotEmpty)Text('Date: ${details['date_time']}'),
           if((details['venue']??'').toString().isNotEmpty)Text('Venue: ${details['venue']}'),
           SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('RSVP enabled (draft setting)'),value:row['rsvp_enabled']==true,onChanged:(v)=>toggleRsvp(row,v)),
-          Align(alignment:Alignment.centerRight,child:TextButton.icon(onPressed:()=>deleteDraft(row),icon:const Icon(Icons.delete_outline),label:const Text('Delete draft'))),
+          Wrap(alignment: WrapAlignment.end, spacing: 8, children: [
+            TextButton.icon(onPressed: saving ? null : () => editInvitation(row), icon: const Icon(Icons.edit_outlined), label: const Text('Edit')),
+            TextButton.icon(onPressed: saving ? null : () => deleteDraft(row), icon: const Icon(Icons.delete_outline), label: const Text('Delete draft')),
+          ]),
         ])));
       }),
     ]),
