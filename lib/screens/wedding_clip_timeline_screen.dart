@@ -91,10 +91,16 @@ class _WeddingClipTimelineScreenState extends State<WeddingClipTimelineScreen> {
           ? Map<String, dynamic>.from(previous)
           : <String, dynamic>{};
       timeline['version'] = 3;
-      timeline['clips'] = _clips;
+      timeline['clips'] = _clips.map((clip) => {
+        'id': clip['id'],
+        'name': clip['name'],
+        'sizeBytes': clip['sizeBytes'],
+        'trimStartMs': clip['trimStartMs'] ?? 0,
+        'trimEndMs': clip['trimEndMs'],
+      }).toList();
       timeline['clipOrder'] = _clips.map((clip) => clip['id']).toList();
       timeline['status'] = 'editable_timeline_draft';
-      timeline['mediaNote'] = 'Clip names and ordering are saved. Local file access may require reselecting source videos after reinstall or clearing app data.';
+      timeline['mediaNote'] = 'Only clip names, sizes and ordering are saved. Source media stays on the customer device and is never uploaded by this timeline screen.';
       final payload = {
         'project_id': widget.projectId,
         'owner_customer_id': user.id,
