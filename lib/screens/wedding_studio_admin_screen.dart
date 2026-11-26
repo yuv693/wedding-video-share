@@ -14,6 +14,8 @@ class _WeddingStudioAdminScreenState extends State<WeddingStudioAdminScreen> {
   List<Map<String, dynamic>> projects = [];
   List<Map<String, dynamic>> payments = [];
   List<Map<String, dynamic>> events = [];
+  List<Map<String, dynamic>> tickets = [];
+  List<Map<String, dynamic>> storage = [];
 
   Future<Map<String, dynamic>> _call(String action) async {
     final response = await supabase.functions.invoke(
@@ -37,14 +39,16 @@ class _WeddingStudioAdminScreenState extends State<WeddingStudioAdminScreen> {
     setState(() { loading = true; error = null; });
     try {
       final results = await Future.wait([
-        _call('dashboard'), _call('projects'), _call('payments'), _call('audit'),
+        _call('dashboard'), _call('projects'), _call('payments'), _call('support'), _call('storage'), _call('audit'),
       ]);
       if (!mounted) return;
       setState(() {
         dashboard = results[0];
         projects = List<Map<String, dynamic>>.from(results[1]['projects'] ?? []);
         payments = List<Map<String, dynamic>>.from(results[2]['payments'] ?? []);
-        events = List<Map<String, dynamic>>.from(results[3]['events'] ?? []);
+        tickets = List<Map<String, dynamic>>.from(results[3]['tickets'] ?? []);
+        storage = List<Map<String, dynamic>>.from(results[4]['storage'] ?? []);
+        events = List<Map<String, dynamic>>.from(results[5]['events'] ?? []);
       });
     } catch (e) {
       if (mounted) setState(() => error = 'Admin access or data unavailable: $e');
@@ -87,6 +91,56 @@ class _WeddingStudioAdminScreenState extends State<WeddingStudioAdminScreen> {
   }
 
 
+  Future<void> _updateSupport(Map<String,dynamic> ticket) async {
+    String status = ticket['status']?.toString() ?? 'open';
+    final response = TextEditingController(text: ticket['admin_response']?.toString() ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, refresh) => AlertDialog(
+        title: Text(ticket['subject']?.toString() ?? 'Support ticket'),
+        content: SizedBox(width: 420, child: Column(mainAxisSize: MainAxisSize.min, children: [
+          DropdownButtonFormField<String>(
+            initialValue: status,
+            decoration: const InputDecoration(labelText: 'Ticket status'),
+            items: const [
+              DropdownMenuItem(value: 'open', child: Text('Open')),
+              DropdownMenuItem(value: 'in_progress', child: Text('In progress')),
+              DropdownMenuItem(value: 'resolved', child: Text('Resolved')),
+            ],
+            onChanged: (v) { if (v != null) refresh(() => status = v); },
+          ),
+          TextField(controller: response, minLines: 3, maxLines: 6, maxLength: 3000,
+            decoration: const InputDecoration(labelText: 'Reply to customer')),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save reply')),
+        ],
+      )),
+    );
+    if (ok == true) {
+      setState(() => loading = true);
+      try {
+        final result = await supabase.functions.invoke('wedding-studio-admin', body: {
+          'action': 'support_update', 'ticketId': ticket['id'], 'status': status, 'adminResponse': response.text.trim(),
+        });
+        final data = result.data;
+        if (result.status < 200 || result.status >= 300 || data is! Map || data['ok'] != true) {
+          throw Exception(data is Map ? (data['error'] ?? 'Support update failed') : 'Support update failed');
+        }
+        await load();
+      } catch (e) {
+        if (mounted) setState(() { loading = false; error = 'Support update failed: $e'; });
+      }
+    }
+    response.dispose();
+  }
+
+  String _gb(dynamic bytes) {
+    final value = double.tryParse('${bytes ?? 0}') ?? 0;
+    return '${(value / (1024 * 1024 * 1024)).toStringAsFixed(2)} GB';
+  }
+
   @override
   Widget build(BuildContext context) {
     final modules = dashboard['modules'] is Map
@@ -96,13 +150,13 @@ class _WeddingStudioAdminScreenState extends State<WeddingStudioAdminScreen> {
         ? Map<String, dynamic>.from(dashboard['billing'] as Map)
         : <String, dynamic>{};
     return DefaultTabController(
-      length: 4,
+      length: 6,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Wedding Studio Admin'),
           actions: [IconButton(onPressed: loading ? null : load, icon: const Icon(Icons.refresh))],
           bottom: const TabBar(isScrollable: true, tabs: [
-            Tab(text: 'Overview'), Tab(text: 'Projects'), Tab(text: 'Billing'), Tab(text: 'Audit'),
+            Tab(text: 'Overview'), Tab(text: 'Projects'), Tab(text: 'Billing'), Tab(text: 'Support'), Tab(text: 'Storage'), Tab(text: 'Audit'),
           ]),
         ),
         body: loading
@@ -160,6 +214,35 @@ class _WeddingStudioAdminScreenState extends State<WeddingStudioAdminScreen> {
                                   IconButton(tooltip: 'Reject payment', onPressed: () => _reviewPayment(p, 'reject'), icon: const Icon(Icons.cancel_outlined, color: Colors.red)),
                                 ])
                               : Text(p['status']?.toString() ?? ''),
+                        ));
+                      },
+                    ),
+                    ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: tickets.length,
+                      itemBuilder: (context, i) {
+                        final t = tickets[i];
+                        return Card(child: ListTile(
+                          title: Text(t['subject']?.toString() ?? 'Support request'),
+                          subtitle: Text('${t['customerEmail'] ?? 'Customer'} • ${t['status'] ?? 'open'}\n${t['message'] ?? ''}'),
+                          isThreeLine: true,
+                          trailing: IconButton(icon: const Icon(Icons.reply_outlined), tooltip: 'Reply / update status', onPressed: () => _updateSupport(t)),
+                        ));
+                      },
+                    ),
+                    ListView.builder(
+                      padding: const EdgeInsets.all(12),
+                      itemCount: storage.length,
+                      itemBuilder: (context, i) {
+                        final s = storage[i];
+                        final connected = s['connected'] == true && s['quotaAvailable'] == true;
+                        return Card(child: ListTile(
+                          leading: Icon(connected ? Icons.cloud_done_outlined : Icons.cloud_off_outlined),
+                          title: Text(s['email']?.toString() ?? 'Google Drive'),
+                          subtitle: Text(connected
+                            ? 'Used ${_gb(s['usageBytes'])} • Limit ${s['limitBytes'] == null ? 'Unlimited / not reported' : _gb(s['limitBytes'])}'
+                            : (s['reason']?.toString() ?? 'Not connected')),
+                          trailing: connected ? Text('${_gb(s['remainingBytes'])} free') : const Text('Unavailable'),
                         ));
                       },
                     ),
