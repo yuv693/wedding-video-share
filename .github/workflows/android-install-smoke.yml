@@ -1,0 +1,36 @@
+name: Android emulator install smoke test
+
+on:
+  workflow_run:
+    workflows: ["Android build"]
+    types: [completed]
+    branches: [feature/wedding-studio-editor-and-customer-storage]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  install-and-launch:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download installable APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wedding-video-share-android-apk
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          path: dist
+
+      - name: Install and launch on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            adb install dist/app-release.apk
+            adb shell monkey -p com.weddingvideoshare.app 1
+            sleep 8
+            adb shell pidof com.weddingvideoshare.app
