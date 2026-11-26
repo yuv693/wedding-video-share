@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:native_video_editor/native_video_editor.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
 import '../services/backend.dart';
@@ -124,7 +125,7 @@ class _WeddingVideoEditorScreenState extends State<WeddingVideoEditorScreen> {
     });
 
     try {
-      final directory = await getTemporaryDirectory();
+      final directory = await getApplicationDocumentsDirectory();
       final stamp = DateTime.now().millisecondsSinceEpoch;
       final trimmedPath = '${directory.path}/wedding-${stamp}-trimmed.mp4';
       final finalPath = '${directory.path}/wedding-${stamp}-final.mp4';
@@ -328,7 +329,7 @@ class _WeddingVideoEditorScreenState extends State<WeddingVideoEditorScreen> {
           if (_exportedPath != null) ...[
             const SizedBox(height: 12),
             SelectableText('Export saved locally: $_exportedPath'),
-            const Text('This is a device-local temporary export. Save/share it before the system clears temporary files.'),
+            const Text('This export is saved in this app's private documents folder. Share it or keep it here; uninstalling the app removes app-private files.'),
           ],
           const SizedBox(height: 16),
           const Card(child: ListTile(
