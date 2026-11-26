@@ -26,7 +26,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
     if(projects.isEmpty){setState(()=>error='Pehle Wedding Studio mein project banayein.');return;}
     final title=TextEditingController(text:'Wedding Invitation');
     final bride=TextEditingController(),groom=TextEditingController(),venue=TextEditingController(),address=TextEditingController(),date=TextEditingController(),functionName=TextEditingController(),contact=TextEditingController(),map=TextEditingController();
-    String projectId=projects.first['id'].toString(),template='hindu_traditional',community='Hindu';
+    String projectId=projects.first['id'].toString(),template='hindu_traditional',community='Hindu',presentationStyle='classic_card';
     bool rsvp=false;
     final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,refresh)=>AlertDialog(
       title:const Text('Create digital invitation'),
@@ -53,7 +53,13 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
           DropdownMenuItem(value:'buddhist_traditional',child:Text('Buddhist traditional')),
           DropdownMenuItem(value:'parsi_traditional',child:Text('Parsi traditional')),
           DropdownMenuItem(value:'custom_minimal',child:Text('Simple / Custom')),
+          DropdownMenuItem(value:'modern_editorial',child:Text('Modern Editorial 2027')),
         ],onChanged:(v){if(v!=null)refresh(()=>template=v);}),
+        DropdownButtonFormField<String>(value:presentationStyle,decoration:const InputDecoration(labelText:'Invitation format'),items:const [
+          DropdownMenuItem(value:'classic_card',child:Text('Classic digital card')),
+          DropdownMenuItem(value:'scrolling_webpage',child:Text('Scrolling invitation webpage')),
+          DropdownMenuItem(value:'cinematic_animated',child:Text('Animated cinematic webpage')),
+        ],onChanged:(v){if(v!=null)refresh(()=>presentationStyle=v);}),
         TextField(controller:bride,decoration:const InputDecoration(labelText:'Bride name')),
         TextField(controller:groom,decoration:const InputDecoration(labelText:'Groom name')),
         TextField(controller:functionName,decoration:const InputDecoration(labelText:'Function name (e.g. Nikah, Haldi, Reception)')),
@@ -73,7 +79,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
       await supabase.from('digital_wedding_invitations').insert({
         'project_id':projectId,'owner_customer_id':user.id,'title':title.text.trim().isEmpty?'Wedding Invitation':title.text.trim(),
         'template_key':template,'rsvp_enabled':rsvp,
-        'event_details':{'community':community,'bride':bride.text.trim(),'groom':groom.text.trim(),'function_name':functionName.text.trim(),'date_time':date.text.trim(),'venue':venue.text.trim(),'address':address.text.trim(),'map_link':map.text.trim(),'rsvp_contact':contact.text.trim(),'functions':[{'name':functionName.text.trim(),'date_time':date.text.trim(),'venue':venue.text.trim(),'address':address.text.trim()}]},
+        'event_details':{'presentation_style':presentationStyle,'community':community,'bride':bride.text.trim(),'groom':groom.text.trim(),'function_name':functionName.text.trim(),'date_time':date.text.trim(),'venue':venue.text.trim(),'address':address.text.trim(),'map_link':map.text.trim(),'rsvp_contact':contact.text.trim(),'functions':[{'name':functionName.text.trim(),'date_time':date.text.trim(),'venue':venue.text.trim(),'address':address.text.trim()}]},
       });
       await load();
     }catch(e){if(mounted)setState(()=>error='Save failed: $e');}
@@ -94,6 +100,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
     final map = TextEditingController(text: details['map_link']?.toString() ?? '');
     final contact = TextEditingController(text: details['rsvp_contact']?.toString() ?? '');
     String template = row['template_key']?.toString() ?? 'classic_floral';
+    String presentationStyle = details['presentation_style']?.toString() ?? 'classic_card';
     bool rsvp = row['rsvp_enabled'] == true;
     final ok = await showDialog<bool>(
       context: context,
@@ -124,8 +131,19 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
                     DropdownMenuItem(value: 'buddhist_traditional', child: Text('Buddhist traditional')),
                     DropdownMenuItem(value: 'parsi_traditional', child: Text('Parsi traditional')),
                     DropdownMenuItem(value: 'custom_minimal', child: Text('Simple / Custom')),
+                    DropdownMenuItem(value: 'modern_editorial', child: Text('Modern Editorial 2027')),
                   ],
                   onChanged: (v) { if (v != null) refresh(() => template = v); },
+                ),
+                DropdownButtonFormField<String>(
+                  value: presentationStyle,
+                  decoration: const InputDecoration(labelText: 'Invitation format'),
+                  items: const [
+                    DropdownMenuItem(value: 'classic_card', child: Text('Classic digital card')),
+                    DropdownMenuItem(value: 'scrolling_webpage', child: Text('Scrolling invitation webpage')),
+                    DropdownMenuItem(value: 'cinematic_animated', child: Text('Animated cinematic webpage')),
+                  ],
+                  onChanged: (v) { if (v != null) refresh(() => presentationStyle = v); },
                 ),
                 TextField(controller: bride, decoration: const InputDecoration(labelText: 'Bride name')),
                 TextField(controller: groom, decoration: const InputDecoration(labelText: 'Groom name')),
@@ -159,6 +177,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
           'template_key': template,
           'rsvp_enabled': rsvp,
           'event_details': {
+            'presentation_style': presentationStyle,
             'community': community,
             'bride': bride.text.trim(),
             'groom': groom.text.trim(),
