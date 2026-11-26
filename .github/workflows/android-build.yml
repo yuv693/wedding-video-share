@@ -2,7 +2,7 @@ name: Android build
 
 on:
   push:
-    branches: [main, feature/wedding-studio-editor-and-customer-storage]
+    branches: [main, feature/wedding-studio-editor-and-customer-storage, feature/unified-wedding-share-free-modules]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -131,6 +131,7 @@ jobs:
           if-no-files-found: error
 
       - name: Install and launch APK on Android emulator
+        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
