@@ -12,6 +12,7 @@ import 'wedding_studio_admin_screen.dart';
 import 'wedding_reels_screen.dart';
 import 'wedding_ai_highlights_screen.dart';
 import 'wedding_support_screen.dart';
+import 'wedding_instagram_handoff_screen.dart';
 
 class WeddingStudioHub extends StatefulWidget {
   const WeddingStudioHub({super.key});
@@ -154,6 +155,38 @@ class _WeddingStudioHubState extends State<WeddingStudioHub> {
     );
   }
 
+  Future<void> _openProjectTool(String title) async {
+    if (_projects.isEmpty) {
+      _showError('Create a wedding project first.');
+      return;
+    }
+    final selected = await showDialog<Map<String,dynamic>>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Choose project • $title'),
+        content: SizedBox(
+          width: 420,
+          child: ListView(
+            shrinkWrap: true,
+            children: _projects.map((p) => ListTile(
+              leading: const Icon(Icons.favorite_outline),
+              title: Text(p['title']?.toString() ?? 'Wedding project'),
+              onTap: () => Navigator.pop(ctx, p),
+            )).toList(),
+          ),
+        ),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    final projectId = selected['id'].toString();
+    final projectTitle = selected['title']?.toString() ?? 'Wedding project';
+    if (title == 'AI Wedding Highlights') {
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => WeddingAiHighlightsScreen(projectId: projectId, projectTitle: projectTitle)));
+    } else if (title == 'Wedding Reels') {
+      await Navigator.of(context).push(MaterialPageRoute(builder: (_) => WeddingReelsScreen(projectId: projectId, projectTitle: projectTitle)));
+    }
+  }
+
   Widget _comingSoon(IconData icon, String title, String subtitle) {
     final details = _moduleDetails[title]!;
     return Card(
@@ -168,21 +201,29 @@ class _WeddingStudioHubState extends State<WeddingStudioHub> {
             Icon(Icons.chevron_right),
           ],
         ),
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(
-          builder: (_) => title == 'QR Wedding Album'
-              ? const WeddingQrAlbumScreen()
-              : title == 'Digital Invitations'
-                  ? const WeddingInvitationScreen()
-                  : title == 'Photographer Studio Portal'
-                      ? const PhotographerStudioPortalScreen()
-                      : title == 'Admin & Billing'
-                          ? const WeddingStudioAdminScreen()
-                          : WeddingStudioModuleScreen(
-                  title: title,
-                  description: subtitle,
-                  features: details,
-                ),
-        )),
+        onTap: () {
+          if (title == 'AI Wedding Highlights' || title == 'Wedding Reels') {
+            _openProjectTool(title);
+            return;
+          }
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => title == 'QR Wedding Album'
+                ? const WeddingQrAlbumScreen()
+                : title == 'Digital Invitations'
+                    ? const WeddingInvitationScreen()
+                    : title == 'Photographer Studio Portal'
+                        ? const PhotographerStudioPortalScreen()
+                        : title == 'Admin & Billing'
+                            ? const WeddingStudioAdminScreen()
+                            : title == 'Instagram Connection'
+                                ? const WeddingInstagramHandoffScreen()
+                                : WeddingStudioModuleScreen(
+                                    title: title,
+                                    description: subtitle,
+                                    features: details,
+                                  ),
+          ));
+        },
       ),
     );
   }
