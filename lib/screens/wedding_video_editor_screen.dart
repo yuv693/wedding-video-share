@@ -66,7 +66,7 @@ class _WeddingVideoEditorScreenState extends State<WeddingVideoEditorScreen> {
         _videoPath = path;
         _videoName = result!.files.single.name;
         _duration = controller.value.duration;
-        final max = _duration.inMilliseconds.toDouble().clamp(1, double.infinity);
+        final max = _duration.inMilliseconds.toDouble().clamp(1, double.infinity).toDouble();
         _trim = RangeValues(0, max);
         _exportedPath = null;
         _error = null;
@@ -221,7 +221,7 @@ class _WeddingVideoEditorScreenState extends State<WeddingVideoEditorScreen> {
   @override
   Widget build(BuildContext context) {
     const burgundy = Color(0xFF6F2438);
-    final totalMs = _duration.inMilliseconds.toDouble().clamp(1, double.infinity);
+    final totalMs = _duration.inMilliseconds.toDouble().clamp(1, double.infinity).toDouble();
     final player = _preview;
     return Scaffold(
       appBar: AppBar(title: Text('Edit · ${widget.projectTitle}')),
@@ -264,10 +264,10 @@ class _WeddingVideoEditorScreenState extends State<WeddingVideoEditorScreen> {
             RangeSlider(
               min: 0,
               max: totalMs,
-              divisions: totalMs > 1 ? totalMs.round().clamp(1, 1000) : 1,
+              divisions: totalMs > 1 ? totalMs.round().clamp(1, 1000).toInt() : 1,
               values: RangeValues(
-                _trim.start.clamp(0, totalMs - 1),
-                _trim.end.clamp(1, totalMs),
+                _trim.start.clamp(0, totalMs - 1).toDouble(),
+                _trim.end.clamp(1, totalMs).toDouble(),
               ),
               onChanged: _working ? null : (value) => setState(() {
                 _trim = RangeValues(value.start, value.end);
