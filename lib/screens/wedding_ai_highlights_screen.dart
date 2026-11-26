@@ -14,6 +14,7 @@ class _WeddingAiHighlightsScreenState extends State<WeddingAiHighlightsScreen>{
   bool loading=true,working=false,consent=false;
   String? error,jobId;
   List<Map<String,dynamic>> clips=[];
+  List<Map<String,dynamic>> analysedClips=[];
   List<Map<String,dynamic>> moments=[];
   @override
   void initState(){super.initState();load();}
@@ -30,6 +31,7 @@ class _WeddingAiHighlightsScreenState extends State<WeddingAiHighlightsScreen>{
     if(!consent){setState(()=>error='Please confirm consent before sending sample frames to AI.');return;}
     final available=clips.where((c)=>c['path'] is String&&File(c['path'].toString()).existsSync()).take(6).toList();
     if(available.isEmpty){setState(()=>error='Add and save clips in your timeline first.');return;}
+    analysedClips=available;
     setState((){working=true;error=null;moments=[];jobId=null;});
     try{
       final frames=<Map<String,dynamic>>[];
@@ -77,8 +79,8 @@ class _WeddingAiHighlightsScreenState extends State<WeddingAiHighlightsScreen>{
       final selected=<Map<String,dynamic>>[];
       for(var i=0;i<moments.length;i++){
         final m=moments[i],idx=(m['clipIndex'] as num?)?.toInt()??-1;
-        if(idx<0||idx>=clips.length)continue;
-        final source=clips[idx],path=source['path']?.toString();
+        if(idx<0||idx>=analysedClips.length)continue;
+        final source=analysedClips[idx],path=source['path']?.toString();
         if(path==null||!File(path).existsSync())continue;
         final duration=(m['clipDurationMs'] as num?)?.toInt()??0;
         final at=(m['timestampMs'] as num?)?.toInt()??0;
