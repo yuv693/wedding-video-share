@@ -11,6 +11,7 @@ import '../services/backend.dart';
 import '../widgets/account_access_card.dart';
 import '../services/video_upload_service.dart';
 import '../services/persistent_video_picker.dart';
+import 'wedding_studio_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -724,6 +725,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.video_library_outlined), selectedIcon: Icon(Icons.video_library_rounded), label: 'Videos'),
           NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Account'),
+          NavigationDestination(icon: Icon(Icons.movie_creation_outlined), selectedIcon: Icon(Icons.movie_creation), label: 'Studio'),
         ],
       ),
       body: SafeArea(
@@ -976,6 +978,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ),
               ],
+              ],
+              if (_selectedTab == 3) ...[
+                const SizedBox(height: 8),
+                const WeddingStudioHub(),
+                const SizedBox(height: 20),
               ],
               if (_selectedTab == 2) ...[
               const SizedBox(height: 12),

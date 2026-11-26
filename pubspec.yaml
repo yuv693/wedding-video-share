@@ -18,6 +18,13 @@ dependencies:
   http: ^1.2.2
   qr_flutter: ^4.1.0
   share_plus: ^10.1.4
+  pro_video_editor: ^2.54.1
+  native_video_editor:
+    git:
+      url: https://github.com/MuhammadFahad0/native_video_editor.git
+      ref: master
+  video_player: ^2.9.2
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

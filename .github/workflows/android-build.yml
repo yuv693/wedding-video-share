@@ -2,7 +2,7 @@ name: Android build
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/wedding-studio-editor-and-customer-storage]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -36,6 +36,9 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Verify native video editor dependency
+        run: flutter pub deps --style=compact | grep -E 'native_video_editor|pro_video_editor'
+
       - name: Analyze Dart and Flutter code
         run: flutter analyze lib --no-pub --no-fatal-infos
 
@@ -63,7 +66,7 @@ jobs:
                   </intent-filter>
           '''
           if 'android:scheme="weddingvideoshare"' not in s:
-              s = s.replace("</activity>", intent + "\n        </activity>")
+              s = s.replace("</activity>", intent + "\\n        </activity>")
               p.write_text(s)
           PY
 
@@ -84,17 +87,8 @@ jobs:
               p.write_text(s)
           PY
 
-      - name: Save generated Android project files to repository
-        run: |
-          git add android pubspec.lock
-          git add -f android/gradlew android/gradlew.bat android/gradle/wrapper/gradle-wrapper.jar
-          if ! git diff --cached --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "Add generated Android platform project [skip ci]"
-            git pull --rebase origin main
-            git push
-          fi
+      # Generated Android files are build inputs only. Do not commit or push
+      # from a pull-request workflow: that can conflict with main and bypass review.
 
       - name: Configure Play Store release signing when secrets are available
         env:
@@ -136,8 +130,20 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
+      - name: Install and launch APK on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          script: |
+            adb install build/app/outputs/flutter-apk/app-release.apk
+            adb shell monkey -p com.weddingvideoshare.app 1
+            sleep 8
+            adb shell pidof com.weddingvideoshare.app
+
       - name: Publish direct-install Customer APK on GitHub Releases
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: customer-latest
