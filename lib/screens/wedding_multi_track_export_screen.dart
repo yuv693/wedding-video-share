@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +29,8 @@ class WeddingMultiTrackExportScreen extends StatefulWidget {
 
 class _WeddingMultiTrackExportScreenState
     extends State<WeddingMultiTrackExportScreen> {
+  final _titleController = TextEditingController();
+  final _captionController = TextEditingController();
   final List<PlatformFile> _clips = [];
   final List<PlatformFile> _tracks = [];
   final Map<String, Map<String, dynamic>> _trackSettings = {};
@@ -37,6 +41,13 @@ class _WeddingMultiTrackExportScreenState
   double _progress = 0;
   String? _outputPath;
   String? _error;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _captionController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -115,6 +126,50 @@ class _WeddingMultiTrackExportScreenState
     });
   }
 
+  Future<Uint8List?> _buildTextOverlay() async {
+    final title = _titleController.text.trim();
+    final caption = _captionController.text.trim();
+    if (title.isEmpty && caption.isEmpty) return null;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final background = Paint()..color = const Color(0x99000000);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(const Rect.fromLTWH(0, 0, 1080, 260), const Radius.circular(24)),
+      background,
+    );
+    var y = 28.0;
+    if (title.isNotEmpty) {
+      final painter = TextPainter(
+        text: TextSpan(text: title, style: const TextStyle(
+          color: Colors.white, fontSize: 58, fontWeight: FontWeight.w800,
+          shadows: [Shadow(color: Colors.black54, blurRadius: 8, offset: Offset(1, 2))],
+        )),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
+        maxLines: 2,
+      )..layout(maxWidth: 980);
+      painter.paint(canvas, Offset((1080 - painter.width) / 2, y));
+      y += painter.height + 12;
+    }
+    if (caption.isNotEmpty) {
+      final painter = TextPainter(
+        text: TextSpan(text: caption, style: const TextStyle(
+          color: Colors.white, fontSize: 34, fontWeight: FontWeight.w500,
+          shadows: [Shadow(color: Colors.black54, blurRadius: 6)],
+        )),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
+        maxLines: 2,
+      )..layout(maxWidth: 980);
+      painter.paint(canvas, Offset((1080 - painter.width) / 2, y));
+    }
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(1080, 260);
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    return data?.buffer.asUint8List();
+  }
+
   Future<void> _export() async {
     if (_clips.isEmpty) {
       setState(() => _error = 'Choose at least one video clip.');
@@ -129,7 +184,17 @@ class _WeddingMultiTrackExportScreenState
     try {
       final directory = await getApplicationDocumentsDirectory();
       final output = '${directory.path}/wedding-multitrack-${DateTime.now().millisecondsSinceEpoch}.mp4';
+      final overlayBytes = await _buildTextOverlay();
       final render = VideoRenderData(
+        imageLayers: overlayBytes == null ? const [] : [
+          ImageLayer(
+            image: EditorLayerImage.memory(overlayBytes),
+            offset: const Offset(0, 1500),
+            size: const Size(1080, 260),
+            startTime: Duration.zero,
+            endTime: const Duration(seconds: 6),
+          ),
+        ],
         videoSegments: _clips.map((clip) {
           final path = clip.path;
           if (path == null) throw StateError('A selected clip is no longer available.');
@@ -180,7 +245,7 @@ class _WeddingMultiTrackExportScreenState
         ])] : const [],
       );
       final subscription = ProVideoEditor.instance.progressStream.listen((event) {
-        if (mounted) setState(() => _progress = event.progress.clamp(0.0, 1.0));
+        if (mounted) setState(() => _progress = event.progress.clamp(0.0, 1.0).toDouble());
       });
       try {
         await ProVideoEditor.instance.renderVideoToFile(output, render);
@@ -226,7 +291,7 @@ class _WeddingMultiTrackExportScreenState
             _timeField(fadeIn, 'Fade in (ms)'),
             _timeField(fadeOut, 'Fade out (ms)'),
             Text('Volume ${(volume * 100).round()}%'),
-            Slider(value: volume.clamp(0, 1), min: 0, max: 1, divisions: 20,
+            Slider(value: volume.clamp(0, 1).toDouble(), min: 0, max: 1, divisions: 20,
               onChanged: (value) => setDialogState(() => volume = value)),
           ])),
         ),
@@ -328,6 +393,19 @@ class _WeddingMultiTrackExportScreenState
               ),
             );
           }),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _titleController,
+            decoration: const InputDecoration(labelText: 'Video title overlay (optional)', border: OutlineInputBorder()),
+            onChanged: (_) => setState(() => _outputPath = null),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _captionController,
+            maxLines: 2,
+            decoration: const InputDecoration(labelText: 'Caption / date overlay (optional)', border: OutlineInputBorder()),
+            onChanged: (_) => setState(() => _outputPath = null),
+          ),
           const SizedBox(height: 8),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -371,7 +449,7 @@ class _WeddingMultiTrackExportScreenState
           ],
           const SizedBox(height: 12),
           const Text(
-            'This on-device beta applies clip order, dissolve transitions, a warm colour filter, and per-track start, trim, volume and fade settings. Source files stay on this device; only the exported MP4 can be shared.',
+            'This on-device editor applies clip order, per-clip trim and speed, dissolve transitions, optional title/caption overlays, a warm colour filter, and per-track start, trim, volume and fade settings. Source files stay on this device; only the exported MP4 can be shared.',
             style: TextStyle(fontSize: 12),
           ),
         ],
