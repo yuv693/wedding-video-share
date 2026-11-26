@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/backend.dart';
 import 'wedding_video_editor_screen.dart';
 import 'wedding_qr_album_screen.dart';
+import 'wedding_invitation_screen.dart';
 
 class WeddingStudioHub extends StatefulWidget {
   const WeddingStudioHub({super.key});
@@ -162,7 +163,9 @@ class _WeddingStudioHubState extends State<WeddingStudioHub> {
         onTap: () => Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => title == 'QR Wedding Album'
               ? const WeddingQrAlbumScreen()
-              : WeddingStudioModuleScreen(
+              : title == 'Digital Invitations'
+                  ? const WeddingInvitationScreen()
+                  : WeddingStudioModuleScreen(
                   title: title,
                   description: subtitle,
                   features: details,
