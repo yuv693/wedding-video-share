@@ -33,7 +33,19 @@ This product is independent from the user's existing main business. Do not share
 5. **AI Wedding Highlights** — optional scene/shot selection and highlight assembly, with customer preview and approval before export. Do not claim AI editing is complete until implemented and tested.
 6. **Digital Invitations** — editable invitation templates, event details, RSVP/contact link, map/location link, and shareable invitation.
 7. **Private Family Albums** — owner-managed guest access, PIN/link protection, revoke/expiry controls, and download permissions.
-8. **Admin & Billing** — separate product admin, plans, payment reconciliation, customer support tools, storage/quota visibility, and audit logs. No changes to existing ₹290 price without owner approval.
+8. **Instagram Reels & Instagram Connection** — let a customer connect their own Instagram professional/creator account through the official Meta/Instagram authorization flow where eligible; show exactly which permissions are requested. From a finished wedding video, create vertical 9:16 Reel versions with editable trim, cover, caption, and export. Save the Reel file to the customer's device/Drive and provide a clear Instagram share/publish handoff. Direct in-app publishing is optional and only enabled if the account type, Meta API permissions, app review, and current platform rules allow it. Never ask for or store an Instagram password. Never auto-post without the customer's final preview and explicit confirmation. Include disconnect/revoke controls.
+9. **Admin & Billing** — separate product admin, plans, payment reconciliation, customer support tools, storage/quota visibility, and audit logs. No changes to existing ₹290 price without owner approval.
+
+## Instagram Reel creation and sharing
+
+- Create a Reel from the customer's edited wedding timeline, with 9:16 framing, safe-area preview, configurable duration, text/captions, cover image, and licensed/customer-provided music.
+- Offer presets for couple entry, bride/groom entry, ceremony highlights, family moments, and a short wedding teaser.
+- Preserve the full-length wedding video; Reel creation produces a separate short-form copy.
+- Let the customer preview, edit, save, export, and then share to Instagram.
+- Use only customer-uploaded or properly licensed audio. Do not promise access to Instagram's full music catalogue or automatically embed copyrighted tracks in exported files.
+- Instagram connection is optional. Without API publishing access, use a supported share/export handoff; do not simulate or scrape Instagram UI.
+- Direct publishing must follow official Meta/Instagram APIs, account eligibility, app review, rate limits, and current policies. The customer must approve each post.
+- Never collect Instagram login credentials. OAuth tokens must be encrypted server-side, scoped minimally, and revocable by the customer.
 
 ## Editing and music rights
 
@@ -59,7 +71,8 @@ This product is independent from the user's existing main business. Do not share
 4. Build studio portal and project invitations.
 5. Build editor timeline, preview, project save/reopen, and export.
 6. Add AI highlights and digital invitations.
-7. Add admin/billing visibility and complete security/privacy review.
-8. Run automated tests plus real Android tests for upload, edit, export, QR, PIN, guest access, payment webhook, revocation, and recovery.
+7. Add Instagram Reel creation/export, official account connection, and API publishing only if approved and eligible.
+8. Add admin/billing visibility and complete security/privacy review.
+9. Run automated tests plus real Android tests for upload, edit, export, QR, PIN, guest access, payment webhook, revocation, account recovery, Reel generation, Instagram connection/disconnect, and explicit post approval.
 
 A feature is not complete merely because it appears in the UI or this specification. Mark each module done only after implementation and acceptance tests pass.
