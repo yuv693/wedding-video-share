@@ -2,6 +2,11 @@
 -- This migration stores metadata and edit instructions only. Wedding media remains
 -- in each customer's own Google Drive; no video/photo bytes are stored here.
 
+-- Ensure the private schema exists on fresh Supabase projects before creating
+-- token storage and helper functions. It is intentionally not exposed via PostgREST.
+create schema if not exists app_private;
+grant usage on schema app_private to authenticated;
+
 create table if not exists public.wedding_projects (
   id uuid primary key default gen_random_uuid(),
   owner_customer_id uuid not null references auth.users(id) on delete cascade,
