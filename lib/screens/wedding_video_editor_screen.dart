@@ -195,6 +195,8 @@ class _WeddingVideoEditorScreenState extends State<WeddingVideoEditorScreen> {
           .from('wedding_editor_projects')
           .select('id')
           .eq('project_id', widget.projectId)
+          .order('updated_at', ascending: false)
+          .limit(1)
           .maybeSingle();
       final payload = {
         'project_id': widget.projectId,
