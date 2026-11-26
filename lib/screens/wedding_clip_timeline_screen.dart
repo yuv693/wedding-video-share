@@ -1,0 +1,205 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+
+import '../services/backend.dart';
+
+class WeddingClipTimelineScreen extends StatefulWidget {
+  const WeddingClipTimelineScreen({
+    super.key,
+    required this.projectId,
+    required this.projectTitle,
+  });
+
+  final String projectId;
+  final String projectTitle;
+
+  @override
+  State<WeddingClipTimelineScreen> createState() => _WeddingClipTimelineScreenState();
+}
+
+class _WeddingClipTimelineScreenState extends State<WeddingClipTimelineScreen> {
+  final List<Map<String, dynamic>> _clips = [];
+  bool _loading = true;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final row = await supabase
+          .from('wedding_editor_projects')
+          .select('timeline_json')
+          .eq('project_id', widget.projectId)
+          .order('updated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      final timeline = row?['timeline_json'];
+      final saved = timeline is Map ? timeline['clips'] : null;
+      if (saved is List) {
+        _clips
+          ..clear()
+          ..addAll(saved.whereType<Map>().map((item) => Map<String, dynamic>.from(item)));
+      }
+    } catch (e) {
+      _error = 'Could not load clip timeline: $e';
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _addClips() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.video,
+      allowMultiple: true,
+      withData: false,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final additions = result.files.map((file) => <String, dynamic>{
+      'id': 'clip-${DateTime.now().microsecondsSinceEpoch}-${file.name.hashCode}',
+      'name': file.name,
+      'path': file.path,
+      'sizeBytes': file.size,
+      'trimStartMs': 0,
+      'trimEndMs': null,
+    }).toList();
+    if (!mounted) return;
+    setState(() {
+      _clips.addAll(additions);
+      _error = null;
+    });
+  }
+
+  Future<void> _save() async {
+    setState(() { _saving = true; _error = null; });
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) throw Exception('Please sign in again.');
+      final existing = await supabase
+          .from('wedding_editor_projects')
+          .select('id,timeline_json')
+          .eq('project_id', widget.projectId)
+          .order('updated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      final previous = existing?['timeline_json'];
+      final timeline = previous is Map
+          ? Map<String, dynamic>.from(previous)
+          : <String, dynamic>{};
+      timeline['version'] = 3;
+      timeline['clips'] = _clips;
+      timeline['clipOrder'] = _clips.map((clip) => clip['id']).toList();
+      timeline['status'] = 'editable_timeline_draft';
+      timeline['mediaNote'] = 'Clip names and ordering are saved. Local file access may require reselecting source videos after reinstall or clearing app data.';
+      final payload = {
+        'project_id': widget.projectId,
+        'owner_customer_id': user.id,
+        'name': 'Wedding edit',
+        'timeline_json': timeline,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      if (existing == null) {
+        await supabase.from('wedding_editor_projects').insert(payload);
+      } else {
+        await supabase.from('wedding_editor_projects').update(payload).eq('id', existing['id']);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Clip order saved to your editable timeline.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not save clip timeline: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const burgundy = Color(0xFF6F2438);
+    return Scaffold(
+      appBar: AppBar(title: Text('Clip timeline · ${widget.projectTitle}')),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  const Text(
+                    'Add wedding clips and arrange their playback order.',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: _saving ? null : _addClips,
+                    icon: const Icon(Icons.video_library_outlined),
+                    label: const Text('Add multiple video clips'),
+                  ),
+                  const Text(
+                    'Drag clips to reorder them. Original files are not changed or uploaded.',
+                    style: TextStyle(fontSize: 12, color: Colors.black54),
+                  ),
+                ]),
+              ),
+              Expanded(
+                child: _clips.isEmpty
+                    ? const Center(child: Text('No clips yet. Add your wedding videos.'))
+                    : ReorderableListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        itemCount: _clips.length,
+                        onReorder: (oldIndex, newIndex) {
+                          setState(() {
+                            if (newIndex > oldIndex) newIndex--;
+                            final clip = _clips.removeAt(oldIndex);
+                            _clips.insert(newIndex, clip);
+                          });
+                        },
+                        itemBuilder: (context, index) {
+                          final clip = _clips[index];
+                          return Card(
+                            key: ValueKey(clip['id']),
+                            child: ListTile(
+                              leading: CircleAvatar(child: Text('${index + 1}')),
+                              title: Text(clip['name']?.toString() ?? 'Wedding clip'),
+                              subtitle: Text(
+                                clip['path'] == null ? 'Source needs to be selected again' : 'Selected on this device',
+                              ),
+                              trailing: IconButton(
+                                tooltip: 'Remove clip',
+                                onPressed: _saving ? null : () => setState(() => _clips.removeAt(index)),
+                                icon: const Icon(Icons.delete_outline),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(_error!, style: const TextStyle(color: Colors.red)),
+                ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _saving ? null : _save,
+                      icon: const Icon(Icons.save_outlined),
+                      label: Text(_saving ? 'Saving…' : 'Save clip timeline'),
+                      style: FilledButton.styleFrom(backgroundColor: burgundy),
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+    );
+  }
+}
