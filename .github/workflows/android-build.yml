@@ -36,6 +36,9 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Verify native video editor dependency
+        run: flutter pub deps --style=compact | grep native_video_editor
+
       - name: Analyze Dart and Flutter code
         run: flutter analyze lib --no-pub --no-fatal-infos
 
