@@ -2,7 +2,7 @@ name: Android build
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/wedding-studio-editor-and-customer-storage]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -37,7 +37,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify native video editor dependency
-        run: flutter pub deps --style=compact | grep native_video_editor
+        run: flutter pub deps --style=compact | grep -E 'native_video_editor|pro_video_editor'
 
       - name: Analyze Dart and Flutter code
         run: flutter analyze lib --no-pub --no-fatal-infos
