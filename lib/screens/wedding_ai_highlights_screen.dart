@@ -63,7 +63,7 @@ class _WeddingAiHighlightsScreenState extends State<WeddingAiHighlightsScreen>{
       }
       final suggested=data['suggestedTimeline'] is Map?Map<String,dynamic>.from(data['suggestedTimeline'] as Map):<String,dynamic>{};
       if(!mounted)return;
-      setState(()=>{
+      setState(() {
         jobId=data['jobId']?.toString();
         moments=List<Map<String,dynamic>>.from((suggested['moments'] as List? ?? []).whereType<Map>().map((e)=>Map<String,dynamic>.from(e)));
       });
@@ -117,7 +117,7 @@ class _WeddingAiHighlightsScreenState extends State<WeddingAiHighlightsScreen>{
   Future<void> reject()async{
     if(jobId==null)return;
     setState(()=>working=true);
-    try{await supabase.from('wedding_ai_highlight_jobs').update({'status':'rejected','updated_at':DateTime.now().toIso8601String()}).eq('id',jobId!);if(mounted)setState(()=>{moments=[];jobId=null;});}
+    try{await supabase.from('wedding_ai_highlight_jobs').update({'status':'rejected','updated_at':DateTime.now().toIso8601String()}).eq('id',jobId!);if(mounted)setState(() { moments=[]; jobId=null; });}
     catch(e){if(mounted)setState(()=>error='Could not reject suggestions: $e');}
     finally{if(mounted)setState(()=>working=false);}
   }
