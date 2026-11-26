@@ -5,6 +5,9 @@ import 'wedding_video_editor_screen.dart';
 import 'wedding_qr_album_screen.dart';
 import 'wedding_invitation_screen.dart';
 import 'photographer_studio_portal_screen.dart';
+import 'wedding_clip_timeline_screen.dart';
+import 'wedding_audio_timeline_screen.dart';
+import 'wedding_multi_track_export_screen.dart';
 
 class WeddingStudioHub extends StatefulWidget {
   const WeddingStudioHub({super.key});
@@ -240,6 +243,42 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
     }
   }
 
+  Future<void> _openClipTimeline() async {
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => WeddingClipTimelineScreen(
+        projectId: widget.projectId,
+        projectTitle: widget.projectTitle,
+      ),
+    ));
+    await _loadDraft();
+  }
+
+  Future<void> _openAudioTimeline() async {
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => WeddingAudioTimelineScreen(
+        projectId: widget.projectId,
+        projectTitle: widget.projectTitle,
+      ),
+    ));
+    await _loadDraft();
+  }
+
+  Future<void> _openRenderer() async {
+    final clips = _timeline['clips'] is List
+        ? List<Map<String, dynamic>>.from((_timeline['clips'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)))
+        : <Map<String, dynamic>>[];
+    final tracks = _timeline['audioTracks'] is List
+        ? List<Map<String, dynamic>>.from((_timeline['audioTracks'] as List).whereType<Map>().map((e) => Map<String, dynamic>.from(e)))
+        : <Map<String, dynamic>>[];
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => WeddingMultiTrackExportScreen(
+        projectTitle: widget.projectTitle,
+        initialClips: clips,
+        initialAudioTracks: tracks,
+      ),
+    ));
+  }
+
   Future<void> _saveDraft() async {
     setState(() { _saving = true; _error = null; });
     try {
@@ -302,15 +341,25 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
               const SizedBox(height: 12),
               Card(child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Timeline clips', style: TextStyle(fontWeight: FontWeight.w700)),
-                  Row(children: [
-                    IconButton(onPressed: _clipCount > 0 ? () => setState(() => _clipCount--) : null, icon: const Icon(Icons.remove_circle_outline)),
-                    Text('$_clipCount', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-                    IconButton(onPressed: () => setState(() => _clipCount++), icon: const Icon(Icons.add_circle_outline)),
-                    const Text('planned clips'),
-                  ]),
-                  const SizedBox(height: 12),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Text('Saved timeline • $_clipCount clips', style: const TextStyle(fontWeight: FontWeight.w700)),
+                  OutlinedButton.icon(
+                    onPressed: _saving ? null : _openClipTimeline,
+                    icon: const Icon(Icons.video_library_outlined),
+                    label: const Text('Manage video clips and order'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _saving ? null : _openAudioTimeline,
+                    icon: const Icon(Icons.library_music_outlined),
+                    label: const Text('Manage multiple music tracks'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _saving ? null : _openRenderer,
+                    icon: const Icon(Icons.movie_filter_outlined),
+                    label: const Text('Render saved timeline to MP4'),
+                    style: FilledButton.styleFrom(backgroundColor: burgundy),
+                  ),
+                  const SizedBox(height: 8),
                   TextField(
                     controller: _notes,
                     minLines: 3,
