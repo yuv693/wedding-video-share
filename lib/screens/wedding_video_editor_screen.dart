@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:video_player/video_player.dart';
 
 import '../services/backend.dart';
+import 'wedding_clip_timeline_screen.dart';
 
 class WeddingVideoEditorScreen extends StatefulWidget {
   const WeddingVideoEditorScreen({
@@ -293,6 +294,18 @@ class _WeddingVideoEditorScreenState extends State<WeddingVideoEditorScreen> {
             Center(child: Text('${_speed.toStringAsFixed(2)}×  ·  0.5× slow motion to 2× fast')),
           ],
           const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _working ? null : () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => WeddingClipTimelineScreen(
+                  projectId: widget.projectId,
+                  projectTitle: widget.projectTitle,
+                ),
+              ),
+            ),
+            icon: const Icon(Icons.video_collection_outlined),
+            label: const Text('Manage multi-clip timeline'),
+          ),
           OutlinedButton.icon(
             onPressed: _working || _videoPath == null ? null : _pickMusic,
             icon: const Icon(Icons.music_note),
