@@ -10,6 +10,7 @@ import 'wedding_audio_timeline_screen.dart';
 import 'wedding_multi_track_export_screen.dart';
 import 'wedding_studio_admin_screen.dart';
 import 'wedding_reels_screen.dart';
+import 'wedding_ai_highlights_screen.dart';
 
 class WeddingStudioHub extends StatefulWidget {
   const WeddingStudioHub({super.key});
@@ -369,6 +370,13 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
                     )),
                     icon: const Icon(Icons.smart_display_outlined),
                     label: const Text('Create 9:16 Wedding Reel'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _saving ? null : () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => WeddingAiHighlightsScreen(projectId: widget.projectId, projectTitle: widget.projectTitle),
+                    )),
+                    icon: const Icon(Icons.auto_awesome),
+                    label: const Text('AI Wedding Highlights'),
                   ),
                   const SizedBox(height: 8),
                   TextField(
