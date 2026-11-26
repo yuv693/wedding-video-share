@@ -9,6 +9,7 @@ import 'wedding_clip_timeline_screen.dart';
 import 'wedding_audio_timeline_screen.dart';
 import 'wedding_multi_track_export_screen.dart';
 import 'wedding_studio_admin_screen.dart';
+import 'wedding_reels_screen.dart';
 
 class WeddingStudioHub extends StatefulWidget {
   const WeddingStudioHub({super.key});
@@ -361,6 +362,13 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
                     icon: const Icon(Icons.movie_filter_outlined),
                     label: const Text('Render saved timeline to MP4'),
                     style: FilledButton.styleFrom(backgroundColor: burgundy),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _saving ? null : () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => WeddingReelsScreen(projectId: widget.projectId, projectTitle: widget.projectTitle),
+                    )),
+                    icon: const Icon(Icons.smart_display_outlined),
+                    label: const Text('Create 9:16 Wedding Reel'),
                   ),
                   const SizedBox(height: 8),
                   TextField(
