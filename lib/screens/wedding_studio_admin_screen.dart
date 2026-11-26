@@ -54,6 +54,38 @@ class _WeddingStudioAdminScreenState extends State<WeddingStudioAdminScreen> {
   }
 
   String _rupees(dynamic paise) => '₹${(double.tryParse('${paise ?? 0}') ?? 0) / 100}';
+  Future<void> _reviewPayment(Map<String,dynamic> payment, String action) async {
+    final approved = action == 'approve';
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(approved ? 'Approve ₹290 payment?' : 'Reject payment?'),
+        content: Text(approved
+          ? 'This verifies the customer payment and starts the existing share-ready workflow.'
+          : 'This marks the manual UPI payment as failed.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(approved ? 'Approve' : 'Reject')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    setState(() => loading = true);
+    try {
+      final response = await supabase.functions.invoke('manual-payment-admin', body: {
+        'action': action,
+        'payment_id': payment['id'],
+      });
+      final data = response.data;
+      if (response.status < 200 || response.status >= 300 || data is! Map || data['ok'] != true) {
+        throw Exception(data is Map ? (data['error'] ?? 'Payment review failed') : 'Payment review failed');
+      }
+      await load();
+    } catch (e) {
+      if (mounted) setState(() { loading = false; error = 'Payment review failed: $e'; });
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -118,10 +150,16 @@ class _WeddingStudioAdminScreenState extends State<WeddingStudioAdminScreen> {
                       itemCount: payments.length,
                       itemBuilder: (context, i) {
                         final p = payments[i];
+                        final pendingManual = p['gateway'] == 'manual_upi' && p['status'] == 'pending';
                         return Card(child: ListTile(
                           title: Text(_rupees(p['amount_paise'])),
                           subtitle: Text('${p['customerEmail'] ?? 'Customer'} • ${p['gateway'] ?? ''}'),
-                          trailing: Text(p['status']?.toString() ?? ''),
+                          trailing: pendingManual
+                              ? Wrap(mainAxisSize: MainAxisSize.min, children: [
+                                  IconButton(tooltip: 'Approve ₹290', onPressed: () => _reviewPayment(p, 'approve'), icon: const Icon(Icons.check_circle_outline, color: Colors.green)),
+                                  IconButton(tooltip: 'Reject payment', onPressed: () => _reviewPayment(p, 'reject'), icon: const Icon(Icons.cancel_outlined, color: Colors.red)),
+                                ])
+                              : Text(p['status']?.toString() ?? ''),
                         ));
                       },
                     ),
