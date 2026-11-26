@@ -196,6 +196,8 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
           .from('wedding_editor_projects')
           .select('id,timeline_json')
           .eq('project_id', widget.projectId)
+          .order('updated_at', ascending: false)
+          .limit(1)
           .maybeSingle();
       if (row != null) {
         _editorId = row['id'].toString();
