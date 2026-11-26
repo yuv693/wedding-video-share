@@ -56,7 +56,7 @@ class _WeddingReelsScreenState extends State<WeddingReelsScreen> {
       return p != null && File(p).existsSync();
     }).toList();
     if (available.isEmpty) { setState(()=>error='Add and save video clips in the timeline first.'); return; }
-    setState(()=>{rendering=true;progress=0;error=null;outputPath=null;});
+    setState(() { rendering=true; progress=0; error=null; outputPath=null; });
     try {
       final segments = available.map((clip) {
         final path = clip['path'].toString();
@@ -110,7 +110,7 @@ class _WeddingReelsScreenState extends State<WeddingReelsScreen> {
           'status':'ready',
         });
       }
-      setState(()=>{outputPath=output;progress=1;});
+      setState(() { outputPath=output; progress=1; });
     } catch(e) { if(mounted)setState(()=>error='Reel export failed: $e'); }
     finally { if(mounted)setState(()=>rendering=false); }
   }
