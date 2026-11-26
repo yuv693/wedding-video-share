@@ -190,6 +190,7 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
   bool _saving = false;
   String? _editorId;
   int _clipCount = 0;
+  Map<String, dynamic> _timeline = {};
   String? _error;
 
   @override
@@ -218,6 +219,7 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
         final timeline = row['timeline_json'] is Map
             ? Map<String, dynamic>.from(row['timeline_json'] as Map)
             : <String, dynamic>{};
+        _timeline = timeline;
         final clips = timeline['clips'];
         _clipCount = clips is List ? clips.length : 0;
         _notes.text = timeline['notes']?.toString() ?? '';
@@ -234,15 +236,16 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
     try {
       final user = supabase.auth.currentUser;
       if (user == null) throw Exception('Please sign in again.');
-      final timeline = <String, dynamic>{
-        'version': 1,
-        'clips': List.generate(_clipCount, (i) => {'id': 'clip-${i + 1}', 'source': null, 'trimStartMs': 0, 'trimEndMs': 0}),
-        'audioTracks': [],
-        'overlays': [],
-        'transitions': [],
-        'notes': _notes.text.trim(),
-        'status': 'editable_draft',
-      };
+      // Preserve the actual clip and audio timeline saved by the dedicated
+      // timeline screens. This screen only owns the notes/status fields.
+      final timeline = Map<String, dynamic>.from(_timeline);
+      timeline['version'] = (timeline['version'] as num?)?.toInt() ?? 1;
+      timeline.putIfAbsent('clips', () => <dynamic>[]);
+      timeline.putIfAbsent('audioTracks', () => <dynamic>[]);
+      timeline.putIfAbsent('overlays', () => <dynamic>[]);
+      timeline.putIfAbsent('transitions', () => <dynamic>[]);
+      timeline['notes'] = _notes.text.trim();
+      timeline['status'] = 'editable_draft';
       final payload = {
         'project_id': widget.projectId,
         'owner_customer_id': user.id,
