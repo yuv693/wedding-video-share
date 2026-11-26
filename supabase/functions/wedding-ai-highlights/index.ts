@@ -35,7 +35,7 @@ Deno.serve(async(req:Request)=>{
     reason:String(m.reason??"").slice(0,240),priority:Number(m.priority??5),
   })).filter((m:any)=>Number.isInteger(m.frameIndex)&&m.frameIndex>=0&&m.frameIndex<frames.length);
   if(!moments.length)throw Error("NO_HIGHLIGHTS_FOUND");
-  const suggested={analysisType:"sampled_frame_visual_analysis",provider:"OpenAI Responses API",moments:moments.map((m:any)=>({...m,clipIndex:frames[m.frameIndex].clipIndex,timestampMs:frames[m.frameIndex].timestampMs,clipName:frames[m.frameIndex].clipName??"Wedding clip"}))};
+  const suggested={analysisType:"sampled_frame_visual_analysis",provider:"OpenAI Responses API",moments:moments.map((m:any)=>({...m,clipIndex:frames[m.frameIndex].clipIndex,timestampMs:frames[m.frameIndex].timestampMs,clipDurationMs:frames[m.frameIndex].clipDurationMs,clipName:frames[m.frameIndex].clipName??"Wedding clip"}))};
   const {error:updateError}=await a.from("wedding_ai_highlight_jobs").update({status:"awaiting_approval",suggested_timeline_json:suggested,updated_at:new Date().toISOString()}).eq("id",job.id).eq("owner_customer_id",user.id);
   if(updateError)throw Error("JOB_SAVE_FAILED");
   return json({ok:true,jobId:job.id,suggestedTimeline:suggested});
