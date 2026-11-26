@@ -330,6 +330,12 @@ class _WeddingVideoEditorScreenState extends State<WeddingVideoEditorScreen> {
             const SizedBox(height: 12),
             SelectableText('Export saved locally: $_exportedPath'),
             const Text('This export is saved in this app's private documents folder. Share it or keep it here; uninstalling the app removes app-private files.'),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => Share.shareXFiles([XFile(_exportedPath!)], text: 'My edited wedding video'),
+              icon: const Icon(Icons.share_outlined),
+              label: const Text('Share / save edited video'),
+            ),
           ],
           const SizedBox(height: 16),
           const Card(child: ListTile(
