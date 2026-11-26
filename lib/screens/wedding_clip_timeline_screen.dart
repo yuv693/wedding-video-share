@@ -1,4 +1,4 @@
-import 'package:file_picker/file_picker.dart';
+import 'dart:io';\n\nimport 'package:file_picker/file_picker.dart';\nimport 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 
 import '../services/backend.dart';
@@ -59,14 +59,25 @@ class _WeddingClipTimelineScreenState extends State<WeddingClipTimelineScreen> {
       withData: false,
     );
     if (result == null || result.files.isEmpty) return;
-    final additions = result.files.map((file) => <String, dynamic>{
-      'id': 'clip-${DateTime.now().microsecondsSinceEpoch}-${file.name.hashCode}',
-      'name': file.name,
-      'path': file.path,
-      'sizeBytes': file.size,
-      'trimStartMs': 0,
-      'trimEndMs': null,
-    }).toList();
+    final directory = await getApplicationDocumentsDirectory();
+    final cache = Directory('${directory.path}/wedding_media/${widget.projectId}/clips');
+    await cache.create(recursive: true);
+    final additions = <Map<String, dynamic>>[];
+    for (final file in result.files) {
+      final source = file.path;
+      if (source == null) continue;
+      final local = await File(source).copy(
+        '${cache.path}/${DateTime.now().microsecondsSinceEpoch}_${file.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')}',
+      );
+      additions.add({
+        'id': 'clip-${DateTime.now().microsecondsSinceEpoch}-${file.name.hashCode}',
+        'name': file.name,
+        'path': local.path,
+        'sizeBytes': file.size,
+        'trimStartMs': 0,
+        'trimEndMs': null,
+      });
+    }
     if (!mounted) return;
     setState(() {
       _clips.addAll(additions);
@@ -100,7 +111,7 @@ class _WeddingClipTimelineScreenState extends State<WeddingClipTimelineScreen> {
       }).toList();
       timeline['clipOrder'] = _clips.map((clip) => clip['id']).toList();
       timeline['status'] = 'editable_timeline_draft';
-      timeline['mediaNote'] = 'Only clip names, sizes and ordering are saved. Source media stays on the customer device and is never uploaded by this timeline screen.';
+      timeline['mediaNote'] = 'Working copies are stored in this app private folder for timeline rendering. Original media remains unchanged; no source files are uploaded to company storage.';
       final payload = {
         'project_id': widget.projectId,
         'owner_customer_id': user.id,
@@ -173,7 +184,7 @@ class _WeddingClipTimelineScreenState extends State<WeddingClipTimelineScreen> {
                               leading: CircleAvatar(child: Text('${index + 1}')),
                               title: Text(clip['name']?.toString() ?? 'Wedding clip'),
                               subtitle: Text(
-                                clip['path'] == null ? 'Source needs to be selected again' : 'Selected on this device',
+                                clip['path'] == null ? 'Source needs to be selected again' : 'Copied to secure app-private working folder',
                               ),
                               trailing: IconButton(
                                 tooltip: 'Remove clip',
