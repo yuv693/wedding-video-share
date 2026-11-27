@@ -147,7 +147,7 @@ class _AccountAccessCardState extends State<AccountAccessCard> {
               const SizedBox(height: 8),
               Text(email, style: const TextStyle(fontWeight: FontWeight.w700, color: burgundy)),
             ] else ...[
-              const Text('Recovery email is optional. Add and verify an email if you want to recover this same customer account after changing or resetting your phone. Uploading and payment do not require it.'),
+              const Text('Add and verify your email to protect this account and accept wedding project invitations sent to this address. You can use free Studio and collaboration features without connecting your own Google Drive.'),
               const SizedBox(height: 12),
               TextField(
                 controller: _email,
