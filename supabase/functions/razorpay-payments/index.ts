@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
       if (!order) return json({ error: "VIDEO_REQUIRED", note: "Upload your wedding video before paying to share it." }, 409);
       if (order.upload_locked) return json({ error: "ACCOUNT_ALREADY_USED", note: "This account has completed its one-video cycle. A new wedding needs a new account." }, 409);
       const { data: uploadedVideo, error: videoError } = await admin.from("wedding_videos")
-        .select("id,upload_status").eq("order_id", order.id).eq("customer_id", customerId).maybeSingle();
+        .select("id,upload_status").eq("order_id", order.id).eq("customer_id", customerId).eq("upload_status", "uploaded").is("deleted_at", null).limit(1).maybeSingle();
       if (videoError) throw new Error("VIDEO_LOOKUP_FAILED");
       if (!uploadedVideo || uploadedVideo.upload_status !== "uploaded") {
         return json({ error: "VIDEO_REQUIRED", note: "Upload and verify your wedding video before paying to share it." }, 409);
