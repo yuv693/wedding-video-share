@@ -160,7 +160,7 @@ class _WeddingClipTimelineScreenState extends State<WeddingClipTimelineScreen> {
       timeline['mediaNote'] = 'Working copies are stored in this app private folder for timeline rendering. Original media remains unchanged; no source files are uploaded to company storage.';
       final payload = {
         'project_id': widget.projectId,
-        'owner_customer_id': user.id,
+        'owner_customer_id': projectOwnerId,
         'name': 'Wedding edit',
         'timeline_json': timeline,
         'updated_at': DateTime.now().toIso8601String(),
