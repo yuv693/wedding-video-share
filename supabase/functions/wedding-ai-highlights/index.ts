@@ -47,7 +47,7 @@ Deno.serve(async(req:Request)=>{
   return json({ok:true,jobId:job.id,suggestedTimeline:suggested});
  }catch(e){
   const message=e instanceof Error?e.message:"AI_ANALYSIS_FAILED";
-  await a.from("wedding_ai_highlight_jobs").update({status:"failed",error_code:message,updated_at:new Date().toISOString()}).eq("id",job.id).eq("owner_customer_id",user.id);
+  await a.from("wedding_ai_highlight_jobs").update({status:"failed",error_code:message,updated_at:new Date().toISOString()}).eq("id",job.id).eq("owner_customer_id",project.owner_customer_id);
   return json({error:message==="AI_PROVIDER_NOT_CONFIGURED"?message:"AI_ANALYSIS_FAILED"},503);
  }
 });
