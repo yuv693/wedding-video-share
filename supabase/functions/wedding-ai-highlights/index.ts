@@ -13,10 +13,16 @@ Deno.serve(async(req:Request)=>{
  for(const f of frames){if(!Number.isInteger(f.clipIndex)||f.clipIndex<0||!Number.isInteger(f.timestampMs)||f.timestampMs<0||typeof f.imageBase64!=="string"||f.imageBase64.length>350000)return json({error:"INVALID_FRAME"},400)}
  const a=admin(),{data:userData,error:authError}=await a.auth.getUser(jwt),user=userData?.user;
  if(authError||!user)return json({error:"INVALID_SESSION"},401);
- const {data:project,error:projectError}=await a.from("wedding_projects").select("id,owner_customer_id,title").eq("id",projectId).eq("owner_customer_id",user.id).maybeSingle();
+ const {data:project,error:projectError}=await a.from("wedding_projects").select("id,owner_customer_id,title").eq("id",projectId).maybeSingle();
  if(projectError||!project)return json({error:"PROJECT_NOT_FOUND"},404);
+ if(project.owner_customer_id!==user.id){
+  const {data:membership,error:membershipError}=await a.from("wedding_project_invitations")
+   .select("id").eq("project_id",projectId).eq("invitee_user_id",user.id)
+   .eq("status","accepted").eq("can_view",true).eq("can_edit",true).gt("expires_at",new Date().toISOString()).maybeSingle();
+  if(membershipError||!membership)return json({error:"PROJECT_ACCESS_DENIED"},403);
+ }
  const {data:job,error:jobError}=await a.from("wedding_ai_highlight_jobs").insert({
-  project_id:projectId,owner_customer_id:user.id,source_drive_file_ids:[],status:"processing",
+  project_id:projectId,owner_customer_id:project.owner_customer_id,source_drive_file_ids:[],status:"processing",
  }).select("id").single();
  if(jobError||!job)return json({error:"JOB_CREATE_FAILED"},500);
  try{
@@ -36,7 +42,7 @@ Deno.serve(async(req:Request)=>{
   })).filter((m:any)=>Number.isInteger(m.frameIndex)&&m.frameIndex>=0&&m.frameIndex<frames.length);
   if(!moments.length)throw Error("NO_HIGHLIGHTS_FOUND");
   const suggested={analysisType:"sampled_frame_visual_analysis",provider:"OpenAI Responses API",moments:moments.map((m:any)=>({...m,clipIndex:frames[m.frameIndex].clipIndex,timestampMs:frames[m.frameIndex].timestampMs,clipDurationMs:frames[m.frameIndex].clipDurationMs,clipName:frames[m.frameIndex].clipName??"Wedding clip"}))};
-  const {error:updateError}=await a.from("wedding_ai_highlight_jobs").update({status:"awaiting_approval",suggested_timeline_json:suggested,updated_at:new Date().toISOString()}).eq("id",job.id).eq("owner_customer_id",user.id);
+  const {error:updateError}=await a.from("wedding_ai_highlight_jobs").update({status:"awaiting_approval",suggested_timeline_json:suggested,updated_at:new Date().toISOString()}).eq("id",job.id).eq("owner_customer_id",project.owner_customer_id);
   if(updateError)throw Error("JOB_SAVE_FAILED");
   return json({ok:true,jobId:job.id,suggestedTimeline:suggested});
  }catch(e){
