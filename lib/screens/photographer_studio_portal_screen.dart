@@ -36,7 +36,7 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
           .order('created_at', ascending: false);
       final inviteRows = await supabase.from('wedding_project_invitations')
           .select('id,project_id,inviter_user_id,invitee_email,role,status,can_view,can_upload,can_edit,expires_at')
-          .inFilter('status', ['pending','accepted']).order('created_at', ascending: false);
+          .inFilter('status', ['pending','accepted']).gt('expires_at', DateTime.now().toIso8601String()).order('created_at', ascending: false);
       if (!mounted) return;
       if (profile != null) {
         studioId = profile['id'].toString();
