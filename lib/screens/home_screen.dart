@@ -376,10 +376,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         'order_id': gatewayOrderId,
         'theme': {'color': '#6F2438'},
       });
-      if (mounted) setState(() => _busy = false);
+      // Keep the payment action locked until Razorpay returns a success or failure callback.
     } catch (e) {
       if (mounted) setState(() { _busy = false; _status = 'Razorpay: $e'; });
     }
+  }
+
+  Future<void> _startPayment() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Choose payment method'),
+        content: const Text('Pay the one-time ₹290 Wedding Video Share fee. Please do not pay twice.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, 'cancel'), child: const Text('Cancel')),
+          OutlinedButton(onPressed: () => Navigator.pop(ctx, 'paytm'), child: const Text('Paytm QR / UPI')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, 'razorpay'), child: const Text('Razorpay')),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'razorpay') await _startRazorpayPayment();
+    if (choice == 'paytm') await _startPaytmPayment();
   }
 
   Future<void> _startPaytmPayment() async {
