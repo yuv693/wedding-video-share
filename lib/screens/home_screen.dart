@@ -4,7 +4,7 @@ import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
@@ -22,7 +22,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _uploadService = VideoUploadService();
   final _appLinks = AppLinks();
-  late final Razorpay _razorpay;
+  String? _manualPaymentStatus;
   StreamSubscription<Uri>? _linkSubscription;
   Timer? _statusRefreshTimer;
   bool _refreshing = false;
@@ -42,10 +42,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _razorpay = Razorpay();
-    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
-    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
-    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
     _statusRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         unawaited(_refresh());
@@ -62,7 +58,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _statusRefreshTimer?.cancel();
     _linkSubscription?.cancel();
-    _razorpay.clear();
     super.dispose();
   }
 
@@ -179,6 +174,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await _loadOrder();
       await _loadQuota();
       await _loadNotifications();
+      await _loadManualPaymentStatus();
     } finally {
       _refreshing = false;
     }
@@ -294,37 +290,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _handlePaymentSuccess(PaymentSuccessResponse response) {
-    if (!mounted) return;
-    setState(() => _status = 'Payment received. Waiting for secure server verification…');
-    unawaited(_verifyPaymentWithServer());
-  }
-
-  void _handlePaymentError(PaymentFailureResponse response) {
-    if (!mounted) return;
-    final message = response.message?.trim();
-    setState(() => _status = message == null || message.isEmpty
-        ? 'Payment was not completed. You have not been charged for a successful share.'
-        : 'Payment was not completed: $message');
-    unawaited(_refresh());
-  }
-
-  void _handleExternalWallet(ExternalWalletResponse response) {
-    if (!mounted) return;
-    setState(() => _status = 'External wallet selected: ${response.walletName ?? 'wallet'}. Complete payment in that app, then return here.');
-  }
-
-  Future<void> _verifyPaymentWithServer() async {
-    for (var attempt = 0; attempt < 12 && mounted; attempt++) {
-      await _loadOrder();
-      if (_order?['payment_status'] == 'paid') {
-        if (mounted) setState(() => _status = '₹290 payment verified securely. Your private share link is ready to create.');
-        return;
+  Future<void> _loadManualPaymentStatus() async {
+    try {
+      final response = await supabase.functions.invoke(
+        'manual-payments',
+        body: {'action': 'status'},
+      );
+      final data = _map(response.data);
+      if (response.status == 200 && mounted) {
+        setState(() => _manualPaymentStatus = data['status']?.toString());
       }
-      await Future.delayed(const Duration(seconds: 2));
-    }
-    if (mounted) {
-      setState(() => _status = 'Payment confirmation is still processing. Please refresh in a moment; do not pay again while this payment is pending.');
+    } catch (_) {
+      // Keep the last known status; the next refresh can retry.
     }
   }
 
@@ -334,43 +311,102 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
     if (_order?['payment_status'] == 'paid') {
-      setState(() => _status = 'Your ₹290 payment is already verified.');
+      setState(() => _status = 'Your ₹290 payment is already verified. No second payment is needed.');
       return;
     }
+    if (_manualPaymentStatus == 'pending') {
+      setState(() => _status = 'Your ₹290 payment request is already submitted and waiting for manual verification. Please do not pay again.');
+      return;
+    }
+
+    const upiId = 'paytm.s4ow732@pty';
+    const payeeName = 'Kausharbanu Yunus Malek';
+    final upiUri = Uri(
+      scheme: 'upi',
+      host: 'pay',
+      queryParameters: {
+        'pa': upiId,
+        'pn': payeeName,
+        'am': '290.00',
+        'cu': 'INR',
+        'tn': 'Wedding Video Share',
+      },
+    );
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Pay ₹290 by Paytm QR / UPI'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Scan this QR using Paytm, Google Pay, PhonePe or another UPI app.'),
+              const SizedBox(height: 12),
+              QrImageView(data: upiUri.toString(), size: 220),
+              const SizedBox(height: 8),
+              const Text(payeeName, style: TextStyle(fontWeight: FontWeight.w700)),
+              const SelectableText(upiId),
+              TextButton.icon(
+                onPressed: () => Clipboard.setData(const ClipboardData(text: upiId)),
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy UPI ID'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final launched = await launchUrl(upiUri, mode: LaunchMode.externalApplication);
+                  if (!launched && mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('No UPI app opened. Please scan the QR instead.')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.account_balance_wallet_outlined),
+                label: const Text('Open UPI app'),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'After paying exactly ₹290, return here and tap “I have paid”. The payment is manually checked before video sharing is unlocked.',
+                style: TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('I have paid'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
 
     setState(() { _busy = true; _status = null; });
     try {
       final response = await supabase.functions.invoke(
-        'razorpay-payments',
-        body: {'action': 'create_order'},
+        'manual-payments',
+        body: {'action': 'submit'},
       );
       final data = _map(response.data);
-      final keyId = data['keyId']?.toString();
-      final gatewayOrderId = data['razorpayOrderId']?.toString();
-      if (response.status != 200 || data['ok'] != true ||
-          keyId == null || keyId.isEmpty ||
-          gatewayOrderId == null || gatewayOrderId.isEmpty ||
-          data['amountPaise'] != 29000 || data['currency'] != 'INR') {
-        throw Exception(data['error']?.toString() ?? 'Secure payment could not be started. Please try again later.');
+      if (response.status != 200 || data['ok'] != true) {
+        throw Exception(data['note']?.toString() ?? data['error']?.toString() ?? 'Could not submit payment confirmation.');
       }
-
-      final user = supabase.auth.currentUser;
-      _razorpay.open({
-        'key': keyId,
-        'amount': 29000,
-        'currency': 'INR',
-        'name': 'Wedding Video Share',
-        'description': 'One-time payment to share your wedding videos',
-        'order_id': gatewayOrderId,
-        'prefill': {
-          if (user?.email != null) 'email': user!.email,
-          if (user?.phone != null) 'contact': user!.phone,
-        },
-        'theme': {'color': '#6F2438'},
-        'retry': {'enabled': true, 'max_count': 2},
-      });
+      if (data['status'] == 'verified') {
+        await _loadOrder();
+        if (mounted) setState(() => _status = 'Your ₹290 payment is already verified. No second payment is needed.');
+      } else {
+        if (mounted) setState(() {
+          _manualPaymentStatus = 'pending';
+          _status = '₹290 payment confirmation submitted. Waiting for admin verification; do not pay again.';
+        });
+      }
     } catch (e) {
-      if (mounted) setState(() => _status = 'Payment setup: $e');
+      if (mounted) setState(() => _status = 'Payment confirmation: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
