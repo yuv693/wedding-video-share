@@ -147,7 +147,17 @@ class _WeddingStudioHubState extends State<WeddingStudioHub> {
         _comingSoon(Icons.qr_code_2, 'QR Wedding Album', 'Private guest album and upload permissions'),
         _comingSoon(Icons.camera_alt_outlined, 'Photographer Studio Portal', 'Create projects, save customer contacts, update status and assign work to your studio'),
         _comingSoon(Icons.auto_awesome, 'AI Wedding Highlights', 'Suggested highlights with customer approval'),
-        _comingSoon(Icons.mail_outline, 'Digital Invitations', 'Editable invitations and RSVP'),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.mail_outline, color: Color(0xFF6F2438)),
+            title: const Text('Digital Invitations'),
+            subtitle: const Text('Create, edit, publish and share wedding invitations with RSVP'),
+            trailing: const Chip(label: Text('Free')),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const WeddingInvitationScreen()),
+            ),
+          ),
+        ),
         _comingSoon(Icons.video_library_outlined, 'Wedding Reels', 'Vertical 9:16 reels and export'),
         _comingSoon(Icons.photo_camera_front_outlined, 'Instagram Connection', 'Official account connection, subject to Meta approval'),
         _comingSoon(Icons.admin_panel_settings_outlined, 'Admin & Billing', 'Separate product administration and payment records'),
