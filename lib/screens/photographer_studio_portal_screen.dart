@@ -212,10 +212,7 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
 
   Future<void> revokeInvitation(Map<String, dynamic> invitation) async {
     try {
-      await supabase.from('wedding_project_invitations').update({
-        'status': 'revoked', 'revoked_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', invitation['id']);
+      await supabase.rpc('revoke_wedding_project_invitation', params: {'p_invitation_id': invitation['id']});
       await load();
     } catch (e) {
       if (mounted) setState(() => error = 'Could not revoke access: $e');
