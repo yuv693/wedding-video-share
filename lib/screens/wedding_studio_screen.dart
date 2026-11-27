@@ -145,7 +145,7 @@ class _WeddingStudioHubState extends State<WeddingStudioHub> {
         const Text('More wedding tools', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         _comingSoon(Icons.qr_code_2, 'QR Wedding Album', 'Private guest album and upload permissions'),
-        _comingSoon(Icons.camera_alt_outlined, 'Photographer Studio Portal', 'Manage client wedding projects'),
+        _comingSoon(Icons.camera_alt_outlined, 'Photographer Studio Portal', 'Create projects, save customer contacts, update status and assign work to your studio'),
         _comingSoon(Icons.auto_awesome, 'AI Wedding Highlights', 'Suggested highlights with customer approval'),
         _comingSoon(Icons.mail_outline, 'Digital Invitations', 'Editable invitations and RSVP'),
         _comingSoon(Icons.video_library_outlined, 'Wedding Reels', 'Vertical 9:16 reels and export'),
@@ -197,7 +197,7 @@ class _WeddingStudioHubState extends State<WeddingStudioHub> {
         trailing: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Chip(label: Text('Development mode')),
+            Chip(label: Text(title == 'Photographer Studio Portal' ? 'Project workspace' : 'Development mode')),
             Icon(Icons.chevron_right),
           ],
         ),
