@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/backend.dart';
 
 class WeddingQrAlbumScreen extends StatefulWidget {
@@ -9,6 +10,7 @@ class WeddingQrAlbumScreen extends StatefulWidget {
   State<WeddingQrAlbumScreen> createState() => _WeddingQrAlbumScreenState();
 }
 class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
+  static const _secureStorage = FlutterSecureStorage();
   bool loading=true, saving=false;
   String? error;
   List<Map<String,dynamic>> projects=[], albums=[];
@@ -18,9 +20,18 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
   Future<void> load() async {
     try {
       final p=await supabase.from('wedding_projects').select('id,title').order('created_at',ascending:false);
-      final a=await supabase.from('wedding_albums').select('id,title,guest_uploads_enabled,guest_view_enabled,downloads_enabled,revoked_at,created_at').order('created_at',ascending:false);
+      final user=supabase.auth.currentUser;
+      if(user==null) throw Exception('Please sign in again.');
+      final a=await supabase.from('wedding_albums').select('id,title,guest_uploads_enabled,guest_view_enabled,downloads_enabled,revoked_at,created_at').eq('owner_customer_id',user.id).order('created_at',ascending:false);
+      final restored=<String,String>{};
+      for(final album in a){
+        final id=album['id'].toString();
+        if(album['revoked_at']!=null){await _secureStorage.delete(key:'wedding_album_guest_link_$id');continue;}
+        final saved=await _secureStorage.read(key:'wedding_album_guest_link_$id');
+        if(saved!=null&&saved.isNotEmpty)restored[id]=saved;
+      }
       if(!mounted)return;
-      setState(() { projects=List<Map<String,dynamic>>.from(p); albums=List<Map<String,dynamic>>.from(a); });
+      setState(() { projects=List<Map<String,dynamic>>.from(p); albums=List<Map<String,dynamic>>.from(a); guestLinks..clear()..addAll(restored); });
     } catch(e){error='Could not load albums: $e';}
     finally{if(mounted)setState(()=>loading=false);}
   }
@@ -56,12 +67,14 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
     final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Revoke access?'),content:const Text('Guest access will be disabled. Original Drive files are not deleted.'),actions:[
       TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Revoke'))]));
     if(ok!=true)return;
-    try{await supabase.functions.invoke('wedding-album-guest',body:{'action':'revoke','albumId':a['id']});await supabase.from('wedding_albums').update({'revoked_at':DateTime.now().toIso8601String(),'guest_uploads_enabled':false,'guest_view_enabled':false}).eq('id',a['id']);if(mounted)setState(()=>guestLinks.remove(a['id'].toString()));await load();}
+    try{await supabase.functions.invoke('wedding-album-guest',body:{'action':'revoke','albumId':a['id']});await supabase.from('wedding_albums').update({'revoked_at':DateTime.now().toIso8601String(),'guest_uploads_enabled':false,'guest_view_enabled':false}).eq('id',a['id']);await _secureStorage.delete(key:'wedding_album_guest_link_${a['id']}');if(mounted)setState(()=>guestLinks.remove(a['id'].toString()));await load();}
     catch(e){if(mounted)setState(()=>error='Revoke failed: $e');}
   }
   Future<void> publishGuestLink(Map<String,dynamic> album) async {
     setState(() => saving = true);
     try {
+      final existing=guestLinks[album['id'].toString()];
+      if(existing!=null&&existing.isNotEmpty){await Share.share(existing,subject:'Wedding photo and video album');return;}
       final response = await supabase.functions.invoke('wedding-album-guest',
         body: {'action': 'publish', 'albumId': album['id']});
       final data = response.data;
@@ -71,6 +84,7 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
       final link = data['guestUrl']?.toString() ?? '';
       if (link.isEmpty) throw Exception('Guest link was not returned.');
       if (!mounted) return;
+      await _secureStorage.write(key:'wedding_album_guest_link_${album['id']}',value:link);
       setState(() => guestLinks[album['id'].toString()] = link);
       await Share.share(link, subject: 'Wedding photo and video album');
     } catch (e) {
@@ -91,8 +105,8 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
   @override
   Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('QR Wedding Album')),
     body:loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.all(16),children:[
-      const Chip(label:Text('Development Mode')),
-      const Text('Guests can upload photos and videos directly into the album owner’s Google Drive. The private link can be revoked at any time.'),
+      const Chip(label:Text('Private Google Drive album')),
+      const Text('Guest links are stored securely on this device so you can reopen the QR code later. Guest uploads go directly to the album owner’s connected Google Drive. Revoking access disables the old link.'),
       const SizedBox(height:12),
       FilledButton.icon(onPressed:saving?null:createAlbum,icon:const Icon(Icons.add),label:const Text('Create wedding album')),
       if(error!=null)Text(error!,style:const TextStyle(color:Colors.red)),
