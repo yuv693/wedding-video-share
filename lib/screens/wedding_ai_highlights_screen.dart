@@ -105,8 +105,10 @@ class _WeddingAiHighlightsScreenState extends State<WeddingAiHighlightsScreen>{
       timeline['aiHighlightsApprovedAt']=DateTime.now().toIso8601String();
       final user=supabase.auth.currentUser;
       if(user==null)throw Exception('Please sign in again.');
+      final projectRow=await supabase.from('wedding_projects').select('owner_customer_id').eq('id',widget.projectId).single();
+      final projectOwnerId=projectRow['owner_customer_id'].toString();
       if(row==null){
-        await supabase.from('wedding_editor_projects').insert({'project_id':widget.projectId,'owner_customer_id':user.id,'name':'AI Wedding Highlights','timeline_json':timeline});
+        await supabase.from('wedding_editor_projects').insert({'project_id':widget.projectId,'owner_customer_id':projectOwnerId,'name':'AI Wedding Highlights','timeline_json':timeline});
       }else{
         await supabase.from('wedding_editor_projects').update({'timeline_json':timeline,'updated_at':DateTime.now().toIso8601String()}).eq('id',row['id']);
       }
