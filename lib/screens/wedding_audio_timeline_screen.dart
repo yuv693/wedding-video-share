@@ -123,7 +123,7 @@ class _WeddingAudioTimelineScreenState extends State<WeddingAudioTimelineScreen>
       timeline['audioMediaNote'] = 'Audio working copies are stored in this app private folder for timeline rendering. Original music files remain unchanged.';
       final payload = {
         'project_id': widget.projectId,
-        'owner_customer_id': user.id,
+        'owner_customer_id': projectOwnerId,
         'name': 'Wedding edit',
         'timeline_json': timeline,
         'updated_at': DateTime.now().toIso8601String(),
