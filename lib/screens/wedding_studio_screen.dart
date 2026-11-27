@@ -331,6 +331,8 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
     try {
       final user = supabase.auth.currentUser;
       if (user == null) throw Exception('Please sign in again.');
+      final projectRow = await supabase.from('wedding_projects').select('owner_customer_id').eq('id', widget.projectId).single();
+      final projectOwnerId = projectRow['owner_customer_id'].toString();
       // Preserve the actual clip and audio timeline saved by the dedicated
       // timeline screens. This screen only owns the notes/status fields.
       final timeline = Map<String, dynamic>.from(_timeline);
@@ -343,7 +345,7 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
       timeline['status'] = 'editable_draft';
       final payload = {
         'project_id': widget.projectId,
-        'owner_customer_id': user.id,
+        'owner_customer_id': projectOwnerId,
         'name': 'Wedding edit',
         'timeline_json': timeline,
         'updated_at': DateTime.now().toIso8601String(),
