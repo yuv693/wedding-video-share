@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
@@ -22,12 +22,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _uploadService = VideoUploadService();
   final _appLinks = AppLinks();
+  late final Razorpay _razorpay;
   StreamSubscription<Uri>? _linkSubscription;
   Timer? _statusRefreshTimer;
   bool _refreshing = false;
   bool _busy = false, _uploading = false, _autoDeleteConsent = false, _pauseRequested = false;
   String? _currentUploadName;
-  String? _manualPaymentStatus;
   int _selectedTab = 0;
   double _uploadProgress = 0;
   String? _status, _driveEmail, _shareUrl, _sharePin;
@@ -42,6 +42,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _razorpay = Razorpay();
+    _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+    _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+    _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
     _statusRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         unawaited(_refresh());
@@ -58,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _statusRefreshTimer?.cancel();
     _linkSubscription?.cancel();
+    _razorpay.clear();
     super.dispose();
   }
 
@@ -154,7 +159,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _driveEmail = null;
         _shareUrl = null;
         _sharePin = null;
-        _manualPaymentStatus = null;
         _status = 'New wedding account created. Your saved Google Drive is connected.';
       });
       await _refresh();
@@ -175,7 +179,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       await _loadOrder();
       await _loadQuota();
       await _loadNotifications();
-      await _loadManualPaymentStatus();
     } finally {
       _refreshing = false;
     }
@@ -275,112 +278,83 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _loadManualPaymentStatus() async {
-    try {
-      final response = await supabase.functions.invoke('manual-payments', body: {'action': 'status'});
-      final data = _map(response.data);
-      if (response.status == 200 && mounted) {
-        setState(() => _manualPaymentStatus = data['status']?.toString());
+  void _handlePaymentSuccess(PaymentSuccessResponse response) {
+    if (!mounted) return;
+    setState(() => _status = 'Payment received. Waiting for secure server verification…');
+    unawaited(_verifyPaymentWithServer());
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    if (!mounted) return;
+    final message = response.message?.trim();
+    setState(() => _status = message == null || message.isEmpty
+        ? 'Payment was not completed. You have not been charged for a successful share.'
+        : 'Payment was not completed: $message');
+    unawaited(_refresh());
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    if (!mounted) return;
+    setState(() => _status = 'External wallet selected: ${response.walletName ?? 'wallet'}. Complete payment in that app, then return here.');
+  }
+
+  Future<void> _verifyPaymentWithServer() async {
+    for (var attempt = 0; attempt < 12 && mounted; attempt++) {
+      await _loadOrder();
+      if (_order?['payment_status'] == 'paid') {
+        if (mounted) setState(() => _status = '₹290 payment verified securely. Your private share link is ready to create.');
+        return;
       }
-    } catch (_) {
-      // Payment status remains protected by the server; refresh can retry.
+      await Future.delayed(const Duration(seconds: 2));
+    }
+    if (mounted) {
+      setState(() => _status = 'Payment confirmation is still processing. Please refresh in a moment; do not pay again while this payment is pending.');
     }
   }
 
   Future<void> _startPayment() async {
     if (!_videos.any((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null) || _order == null) {
-      setState(() => _status = 'Upload your wedding video first. Payment is needed when you share it.');
+      setState(() => _status = 'Upload your wedding video first. Payment is needed only when you share it.');
       return;
     }
-    if (_manualPaymentStatus == 'pending') {
-      setState(() => _status = 'Your payment request is already submitted. Please wait for manual verification.');
+    if (_order?['payment_status'] == 'paid') {
+      setState(() => _status = 'Your ₹290 payment is already verified.');
       return;
     }
-
-    const upiId = 'paytm.s4ow732@pty';
-    const payeeName = 'Kausharbanu Yunus Malek';
-    final upiUri = Uri(
-      scheme: 'upi',
-      host: 'pay',
-      queryParameters: {
-        'pa': upiId,
-        'pn': payeeName,
-        'am': '290.00',
-        'cu': 'INR',
-        'tn': 'Wedding Video Share',
-      },
-    );
-    final confirmedPaid = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Pay ₹290 by UPI'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Scan this QR with any UPI app and pay exactly ₹290.'),
-              const SizedBox(height: 12),
-              QrImageView(data: upiUri.toString(), size: 220),
-              const SizedBox(height: 8),
-              const Text('Kausharbanu Yunus Malek', style: TextStyle(fontWeight: FontWeight.w700)),
-              SelectableText(upiId),
-              TextButton.icon(
-                onPressed: () => Clipboard.setData(const ClipboardData(text: upiId)),
-                icon: const Icon(Icons.copy),
-                label: const Text('Copy UPI ID'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  final launched = await launchUrl(upiUri, mode: LaunchMode.externalApplication);
-                  if (!launched && mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('No UPI app could open the payment link. Scan the QR instead.')),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.account_balance_wallet_outlined),
-                label: const Text('Open UPI app'),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'After you pay, tap “I have paid”. Your request will remain pending until the owner checks the payment in Paytm.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Colors.black54),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('I have paid'),
-          ),
-        ],
-      ),
-    );
-    if (confirmedPaid != true || !mounted) return;
 
     setState(() { _busy = true; _status = null; });
     try {
-      final response = await supabase.functions.invoke('manual-payments', body: {
-        'action': 'submit',
-      });
+      final response = await supabase.functions.invoke(
+        'razorpay-payments',
+        body: {'action': 'create_order'},
+      );
       final data = _map(response.data);
-      if (response.status != 200 || data['ok'] != true) {
-        throw Exception(data['note']?.toString() ?? data['error']?.toString() ?? 'Could not submit payment request.');
+      final keyId = data['keyId']?.toString();
+      final gatewayOrderId = data['razorpayOrderId']?.toString();
+      if (response.status != 200 || data['ok'] != true ||
+          keyId == null || keyId.isEmpty ||
+          gatewayOrderId == null || gatewayOrderId.isEmpty ||
+          data['amountPaise'] != 29000 || data['currency'] != 'INR') {
+        throw Exception(data['error']?.toString() ?? 'Secure payment could not be started. Please try again later.');
       }
-      if (mounted) {
-        setState(() {
-          _manualPaymentStatus = data['status']?.toString() ?? 'pending';
-          _status = 'Payment request submitted. Sharing will unlock only after the owner verifies the ₹290 payment.';
-        });
-      }
+
+      final user = supabase.auth.currentUser;
+      _razorpay.open({
+        'key': keyId,
+        'amount': 29000,
+        'currency': 'INR',
+        'name': 'Wedding Video Share',
+        'description': 'One-time payment to share your wedding videos',
+        'order_id': gatewayOrderId,
+        'prefill': {
+          if (user?.email != null) 'email': user!.email,
+          if (user?.phone != null) 'contact': user!.phone,
+        },
+        'theme': {'color': '#6F2438'},
+        'retry': {'enabled': true, 'max_count': 2},
+      });
     } catch (e) {
-      if (mounted) setState(() => _status = 'Payment request: $e');
+      if (mounted) setState(() => _status = 'Payment setup: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -403,7 +377,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() { _busy = true; _status = null; _uploadProgress = 0; });
     try {
       if (_order == null) {
-        final prepared = await supabase.functions.invoke('manual-payments', body: {'action': 'prepare_upload'});
+        final prepared = await supabase.functions.invoke('razorpay-payments', body: {'action': 'prepare_upload'});
         final preparedData = _map(prepared.data);
         if (prepared.status != 200 || preparedData['ok'] != true) {
           throw Exception(preparedData['note']?.toString() ?? preparedData['error']?.toString() ?? 'Could not prepare your upload.');
@@ -879,18 +853,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       title: const Text('I agree: automatically delete each Google Drive video after its full receiver download is verified.'),
                       subtitle: const Text('Only the Google Drive copy is deleted. The original on your phone is not touched. If the download is interrupted or cannot be verified, the Drive copy is kept.'),
                     ),
-                    if (!paid && _manualPaymentStatus == 'pending')
-                      const ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.hourglass_top_rounded, color: Colors.orange),
-                        title: Text('UPI payment submitted'),
-                        subtitle: Text('Waiting for manual verification. Refresh this screen for status updates.'),
-                      )
-                    else if (!paid)
+                    if (!paid)
                       FilledButton.icon(
                         onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _startPayment,
-                        icon: const Icon(Icons.qr_code_2_rounded),
-                        label: const Text('Pay ₹290 by QR / UPI'),
+                        icon: const Icon(Icons.lock_rounded),
+                        label: const Text('Pay ₹290 securely'),
                         style: FilledButton.styleFrom(backgroundColor: burgundy),
                       )
                     else
