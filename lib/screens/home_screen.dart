@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
@@ -22,6 +23,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _uploadService = VideoUploadService();
   final _appLinks = AppLinks();
+  Razorpay? _razorpay;
   String? _manualPaymentStatus;
   StreamSubscription<Uri>? _linkSubscription;
   Timer? _statusRefreshTimer;
@@ -58,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _statusRefreshTimer?.cancel();
     _linkSubscription?.cancel();
+    _razorpay?.clear();
     super.dispose();
   }
 
@@ -305,7 +308,81 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _startPayment() async {
+  Future<void> _startRazorpayPayment() async {
+    if (!_videos.any((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null) || _order == null) {
+      setState(() => _status = 'Upload your wedding video first. Payment is needed only when you share it.');
+      return;
+    }
+    if (_order?['payment_status'] == 'paid') {
+      setState(() => _status = 'Your ₹290 payment is already verified. No second payment is needed.');
+      return;
+    }
+    if (_manualPaymentStatus == 'pending') {
+      setState(() => _status = 'Your Paytm/UPI payment request is already pending verification. Please do not pay again.');
+      return;
+    }
+    setState(() { _busy = true; _status = null; });
+    try {
+      final response = await supabase.functions.invoke('razorpay-payments', body: {'action': 'create_order'});
+      final data = _map(response.data);
+      if (response.status != 200 || data['ok'] != true) {
+        throw Exception(data['note']?.toString() ?? data['error']?.toString() ?? 'Razorpay checkout is not ready.');
+      }
+      final keyId = data['keyId']?.toString();
+      final gatewayOrderId = data['razorpayOrderId']?.toString();
+      if (keyId == null || gatewayOrderId == null) throw Exception('Razorpay order details are incomplete.');
+      final checkout = Razorpay();
+      _razorpay = checkout;
+      checkout.on(Razorpay.EVENT_PAYMENT_SUCCESS, (PaymentSuccessResponse result) async {
+        try {
+          final verify = await supabase.functions.invoke('razorpay-payments', body: {
+            'action': 'verify_payment',
+            'razorpayOrderId': result.orderId ?? gatewayOrderId,
+            'razorpayPaymentId': result.paymentId,
+            'razorpaySignature': result.signature,
+          });
+          final verified = _map(verify.data);
+          if (verify.status != 200 || verified['ok'] != true || verified['verified'] != true) {
+            throw Exception(verified['error']?.toString() ?? 'Server could not verify this payment yet.');
+          }
+          await _loadOrder();
+          if (mounted) setState(() => _status = '₹290 payment verified securely by Razorpay. Your private sharing is unlocked.');
+        } catch (e) {
+          if (mounted) setState(() => _status = 'Payment received by Razorpay; server verification is pending. Tap Refresh shortly. Do not pay again. ($e)');
+        } finally {
+          checkout.clear();
+          if (identical(_razorpay, checkout)) _razorpay = null;
+          if (mounted) setState(() => _busy = false);
+        }
+      });
+      checkout.on(Razorpay.EVENT_PAYMENT_ERROR, (PaymentFailureResponse result) async {
+        checkout.clear();
+        if (identical(_razorpay, checkout)) _razorpay = null;
+        await _loadOrder();
+        if (mounted) setState(() {
+          _busy = false;
+          _status = 'Razorpay payment was not completed. If money was deducted, do not pay again; refresh and check payment status.';
+        });
+      });
+      checkout.on(Razorpay.EVENT_EXTERNAL_WALLET, (ExternalWalletResponse result) {
+        if (mounted) setState(() => _status = 'External wallet selected: ${result.walletName ?? 'wallet'}. Complete payment in the wallet.');
+      });
+      checkout.open({
+        'key': keyId,
+        'amount': 29000,
+        'currency': 'INR',
+        'name': 'Wedding Video Share',
+        'description': 'One wedding video upload and share',
+        'order_id': gatewayOrderId,
+        'theme': {'color': '#6F2438'},
+      });
+      if (mounted) setState(() => _busy = false);
+    } catch (e) {
+      if (mounted) setState(() { _busy = false; _status = 'Razorpay: $e'; });
+    }
+  }
+
+  Future<void> _startPaytmPayment() async {
     if (!_videos.any((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null) || _order == null) {
       setState(() => _status = 'Upload your wedding video first. Payment is needed only when you share it.');
       return;
@@ -905,13 +982,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       title: const Text('I agree: automatically delete each Google Drive video after its full receiver download is verified.'),
                       subtitle: const Text('Only the Google Drive copy is deleted. The original on your phone is not touched. If the download is interrupted or cannot be verified, the Drive copy is kept.'),
                     ),
-                    if (!paid)
-                      FilledButton.icon(
-                        onPressed: _busy || _uploading ? null : _startPayment,
-                        icon: const Icon(Icons.lock_rounded),
-                        label: const Text('Pay ₹290 securely'),
-                        style: FilledButton.styleFrom(backgroundColor: burgundy),
-                      )
+                    if (!paid) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _busy || _uploading ? null : _startRazorpayPayment,
+                          icon: const Icon(Icons.payment_rounded),
+                          label: const Text('Pay ₹290 with Razorpay'),
+                          style: FilledButton.styleFrom(backgroundColor: burgundy),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _busy || _uploading ? null : _startPaytmPayment,
+                          icon: const Icon(Icons.qr_code_rounded),
+                          label: const Text('Pay ₹290 with Paytm QR / UPI'),
+                        ),
+                      ),
+                    ]
                     else
                       OutlinedButton.icon(
                         onPressed: _busy || _uploading ? null : _makeShareLink,
