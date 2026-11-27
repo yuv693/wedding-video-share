@@ -43,7 +43,8 @@ async function unlockAlbum(a:any,req:Request,token:string,album:any){
  const signature=await pinSignature(token,album.album_id,expires);
  return new Response(JSON.stringify({ok:true}),{headers:{...CORS,"Content-Type":"application/json","Cache-Control":"no-store","Set-Cookie":pinCookieName+"="+expires+"."+signature+"; Path="+albumPinCookiePath+"; Max-Age=3600; Secure; HttpOnly; SameSite=Lax"}});
 }
-\nconst base=(token:string,action?:string)=>Deno.env.get("SUPABASE_URL")+"/functions/v1/wedding-album-guest?token="+encodeURIComponent(token)+(action?"&action="+action:"");
+
+const base=(token:string,action?:string)=>Deno.env.get("SUPABASE_URL")+"/functions/v1/wedding-album-guest?token="+encodeURIComponent(token)+(action?"&action="+action:"");
 async function owner(req:Request,b:any){
  const auth=req.headers.get("Authorization")??"",jwt=auth.replace(/^Bearer\s+/i,"");
  if(!jwt||jwt===auth)return json({error:"AUTH_REQUIRED"},401);
