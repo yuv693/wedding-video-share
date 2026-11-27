@@ -19,10 +19,10 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
   void initState(){super.initState();load();}
   Future<void> load() async {
     try {
-      final p=await supabase.from('wedding_projects').select('id,title').order('created_at',ascending:false);
+      final p=await supabase.from('wedding_projects').select('id,title,owner_customer_id').order('created_at',ascending:false);
       final user=supabase.auth.currentUser;
       if(user==null) throw Exception('Please sign in again.');
-      final a=await supabase.from('wedding_albums').select('id,title,guest_uploads_enabled,guest_view_enabled,downloads_enabled,revoked_at,created_at').eq('owner_customer_id',user.id).order('created_at',ascending:false);
+      final a=await supabase.from('wedding_albums').select('id,project_id,owner_customer_id,title,guest_uploads_enabled,guest_view_enabled,downloads_enabled,revoked_at,created_at').order('created_at',ascending:false);
       final restored=<String,String>{};
       for(final album in a){
         final id=album['id'].toString();
@@ -54,7 +54,8 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
     try{
       final user=supabase.auth.currentUser;
       if(user==null)throw Exception('Please sign in again.');
-      await supabase.from('wedding_albums').insert({'project_id':projectId,'owner_customer_id':user.id,'title':name.text.trim(),'guest_uploads_enabled':false,'guest_view_enabled':true,'downloads_enabled':false});
+      final selectedProject=projects.firstWhere((p)=>p['id'].toString()==projectId);
+      await supabase.from('wedding_albums').insert({'project_id':projectId,'owner_customer_id':selectedProject['owner_customer_id'],'title':name.text.trim(),'guest_uploads_enabled':false,'guest_view_enabled':true,'downloads_enabled':false});
       await load();
     }catch(e){if(mounted)setState(()=>error='Create failed: $e');}
     finally{name.dispose();if(mounted)setState(()=>saving=false);}
@@ -112,13 +113,16 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
       if(error!=null)Text(error!,style:const TextStyle(color:Colors.red)),
       if(albums.isEmpty)const Text('No albums created yet.'),
       ...albums.map((a){
+        final isOwner=a['owner_customer_id']==supabase.auth.currentUser?.id;
         final revoked=a['revoked_at']!=null;
         return Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Text(a['title'].toString(),style:Theme.of(context).textTheme.titleMedium),
           Text(revoked?'Access revoked':'Album active'),
-          SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Guest viewing'),value:a['guest_view_enabled']==true&&!revoked,onChanged:revoked?null:(v)=>setPermission(a,'guest_view_enabled',v)),
-          SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Guest uploads'),value:a['guest_uploads_enabled']==true&&!revoked,onChanged:revoked?null:(v)=>setPermission(a,'guest_uploads_enabled',v)),
-          SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Guest downloads'),value:a['downloads_enabled']==true&&!revoked,onChanged:revoked?null:(v)=>setPermission(a,'downloads_enabled',v)),
+          if(isOwner) ...[
+            SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Guest viewing'),value:a['guest_view_enabled']==true&&!revoked,onChanged:revoked?null:(v)=>setPermission(a,'guest_view_enabled',v)),
+            SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Guest uploads'),value:a['guest_uploads_enabled']==true&&!revoked,onChanged:revoked?null:(v)=>setPermission(a,'guest_uploads_enabled',v)),
+            SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Guest downloads'),value:a['downloads_enabled']==true&&!revoked,onChanged:revoked?null:(v)=>setPermission(a,'downloads_enabled',v)),
+          ] else const Text('Shared album • guest settings controlled by the customer'),
           Wrap(spacing:8,children:[
             if (!revoked) FilledButton.icon(
               onPressed: saving ? null : () => publishGuestLink(a),
@@ -130,7 +134,7 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
               icon: const Icon(Icons.qr_code),
               label: const Text('Show QR'),
             ),
-            if(!revoked) TextButton.icon(onPressed:()=>revoke(a),icon:const Icon(Icons.block),label:const Text('Revoke'))
+            if(isOwner&&!revoked) TextButton.icon(onPressed:()=>revoke(a),icon:const Icon(Icons.block),label:const Text('Revoke'))
           ])
         ])));
       })
