@@ -103,8 +103,10 @@ class _WeddingReelsScreenState extends State<WeddingReelsScreen> {
       if (!mounted) return;
       final user=supabase.auth.currentUser;
       if(user!=null){
+        final projectRow=await supabase.from('wedding_projects').select('owner_customer_id').eq('id',widget.projectId).single();
+        final projectOwnerId=projectRow['owner_customer_id'].toString();
         await supabase.from('wedding_reel_exports').insert({
-          'project_id':widget.projectId,'owner_customer_id':user.id,
+          'project_id':widget.projectId,'owner_customer_id':projectOwnerId,
           'preset_key':preset,'aspect_ratio':'9:16',
           'edit_settings_json':{'clipCount':available.length,'audioTrackCount':audio.length,'localExportName':output.split('/').last},
           'status':'ready',
