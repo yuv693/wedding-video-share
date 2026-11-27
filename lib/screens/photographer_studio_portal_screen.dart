@@ -1,84 +1,224 @@
 import 'package:flutter/material.dart';
 import '../services/backend.dart';
 
-class PhotographerStudioPortalScreen extends StatefulWidget{
+class PhotographerStudioPortalScreen extends StatefulWidget {
   const PhotographerStudioPortalScreen({super.key});
   @override
-  State<PhotographerStudioPortalScreen> createState()=>_PhotographerStudioPortalScreenState();
+  State<PhotographerStudioPortalScreen> createState() => _PhotographerStudioPortalScreenState();
 }
-class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPortalScreen>{
-  final name=TextEditingController(),email=TextEditingController(),phone=TextEditingController(),website=TextEditingController();
-  bool loading=true,saving=false;
-  String? error,studioId;
-  List<Map<String,dynamic>> projects=[];
+
+class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPortalScreen> {
+  final name = TextEditingController();
+  final email = TextEditingController();
+  final phone = TextEditingController();
+  final website = TextEditingController();
+  bool loading = true, saving = false;
+  String? error, studioId;
+  List<Map<String, dynamic>> projects = [];
+
   @override
-  void initState(){super.initState();load();}
+  void initState() { super.initState(); load(); }
   @override
-  void dispose(){name.dispose();email.dispose();phone.dispose();website.dispose();super.dispose();}
-  Future<void> load()async{
-    try{
-      final profile=await supabase.from('photographer_studios').select('id,studio_name,contact_email,contact_phone,website_url').maybeSingle();
-      final rows=await supabase.from('wedding_projects').select('id,title,studio_id,status').order('created_at',ascending:false);
-      if(!mounted)return;
-      if(profile!=null){studioId=profile['id'].toString();name.text=profile['studio_name']?.toString()??'';email.text=profile['contact_email']?.toString()??'';phone.text=profile['contact_phone']?.toString()??'';website.text=profile['website_url']?.toString()??'';}
-      setState(()=>projects=List<Map<String,dynamic>>.from(rows));
-    }catch(e){error='Could not load studio portal: $e';}
-    finally{if(mounted)setState(()=>loading=false);}
+  void dispose() { name.dispose(); email.dispose(); phone.dispose(); website.dispose(); super.dispose(); }
+
+  Future<void> load() async {
+    setState(() { loading = true; error = null; });
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) throw Exception('Please sign in again.');
+      final profile = await supabase.from('photographer_studios')
+          .select('id,studio_name,contact_email,contact_phone,website_url')
+          .eq('owner_customer_id', user.id).maybeSingle();
+      final rows = await supabase.from('wedding_projects')
+          .select('id,title,studio_id,status,event_date,venue,client_name,client_email,client_phone,created_at')
+          .eq('owner_customer_id', user.id).order('created_at', ascending: false);
+      if (!mounted) return;
+      if (profile != null) {
+        studioId = profile['id'].toString();
+        name.text = profile['studio_name']?.toString() ?? '';
+        email.text = profile['contact_email']?.toString() ?? '';
+        phone.text = profile['contact_phone']?.toString() ?? '';
+        website.text = profile['website_url']?.toString() ?? '';
+      } else { studioId = null; }
+      setState(() => projects = List<Map<String, dynamic>>.from(rows));
+    } catch (e) {
+      if (mounted) setState(() => error = 'Could not load studio portal: $e');
+    } finally { if (mounted) setState(() => loading = false); }
   }
-  Future<void> saveProfile()async{
-    if(name.text.trim().isEmpty){setState(()=>error='Studio name is required.');return;}
-    setState(()=>saving=true);
-    try{
-      final user=supabase.auth.currentUser;if(user==null)throw Exception('Please sign in again.');
-      final result=await supabase.from('photographer_studios').upsert({
-        'owner_customer_id':user.id,'studio_name':name.text.trim(),
-        'contact_email':email.text.trim().isEmpty?null:email.text.trim(),
-        'contact_phone':phone.text.trim().isEmpty?null:phone.text.trim(),
-        'website_url':website.text.trim().isEmpty?null:website.text.trim(),
-        'updated_at':DateTime.now().toIso8601String(),
-      },onConflict:'owner_customer_id').select('id').single();
-      studioId=result['id'].toString();
-      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Studio profile saved.')));
+
+  Future<void> saveProfile() async {
+    if (name.text.trim().isEmpty) { setState(() => error = 'Studio name is required.'); return; }
+    setState(() { saving = true; error = null; });
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) throw Exception('Please sign in again.');
+      final result = await supabase.from('photographer_studios').upsert({
+        'owner_customer_id': user.id, 'studio_name': name.text.trim(),
+        'contact_email': email.text.trim().isEmpty ? null : email.text.trim(),
+        'contact_phone': phone.text.trim().isEmpty ? null : phone.text.trim(),
+        'website_url': website.text.trim().isEmpty ? null : website.text.trim(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'owner_customer_id').select('id').single();
+      studioId = result['id'].toString();
       await load();
-    }catch(e){if(mounted)setState(()=>error='Save failed: $e');}
-    finally{if(mounted)setState(()=>saving=false);}
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Studio profile saved.')));
+    } catch (e) {
+      if (mounted) setState(() => error = 'Save failed: $e');
+    } finally { if (mounted) setState(() => saving = false); }
   }
-  Future<void> assignProject(Map<String,dynamic> project,bool attach)async{
-    if(studioId==null){setState(()=>error='Save your studio profile first.');return;}
-    try{
-      await supabase.from('wedding_projects').update({'studio_id':attach?studioId:null,'updated_at':DateTime.now().toIso8601String()}).eq('id',project['id']);
+
+  Future<void> editProject([Map<String, dynamic>? project]) async {
+    final title = TextEditingController(text: project?['title']?.toString() ?? '');
+    final client = TextEditingController(text: project?['client_name']?.toString() ?? '');
+    final clientEmail = TextEditingController(text: project?['client_email']?.toString() ?? '');
+    final clientPhone = TextEditingController(text: project?['client_phone']?.toString() ?? '');
+    final venue = TextEditingController(text: project?['venue']?.toString() ?? '');
+    final eventDate = TextEditingController(text: project?['event_date']?.toString() ?? '');
+    final formKey = GlobalKey<FormState>();
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(project == null ? 'Create wedding project' : 'Edit wedding project'),
+        content: SizedBox(width: 460, child: SingleChildScrollView(
+          child: Form(key: formKey, child: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextFormField(controller: title, decoration: const InputDecoration(labelText: 'Project / wedding name'), validator: (v) => v == null || v.trim().isEmpty ? 'Project name is required' : null),
+            TextFormField(controller: client, decoration: const InputDecoration(labelText: 'Customer name')),
+            TextFormField(controller: clientEmail, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Customer email')),
+            TextFormField(controller: clientPhone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Customer phone')),
+            TextFormField(controller: eventDate, decoration: const InputDecoration(labelText: 'Event date (YYYY-MM-DD)'), keyboardType: TextInputType.datetime),
+            TextFormField(controller: venue, decoration: const InputDecoration(labelText: 'Venue / location')),
+          ])),
+        )),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () { if (formKey.currentState!.validate()) Navigator.pop(ctx, true); }, child: const Text('Save')),
+        ],
+      ),
+    );
+    if (result != true) {
+      for (final c in [title, client, clientEmail, clientPhone, venue, eventDate]) { c.dispose(); }
+      return;
+    }
+    setState(() { saving = true; error = null; });
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) throw Exception('Please sign in again.');
+      DateTime? parsedDate;
+      if (eventDate.text.trim().isNotEmpty) {
+        parsedDate = DateTime.tryParse(eventDate.text.trim());
+        if (parsedDate == null) throw Exception('Enter event date as YYYY-MM-DD.');
+      }
+      final values = {
+        'title': title.text.trim(),
+        'client_name': client.text.trim().isEmpty ? null : client.text.trim(),
+        'client_email': clientEmail.text.trim().isEmpty ? null : clientEmail.text.trim(),
+        'client_phone': clientPhone.text.trim().isEmpty ? null : clientPhone.text.trim(),
+        'event_date': parsedDate == null ? null : parsedDate.toIso8601String().substring(0, 10),
+        'venue': venue.text.trim().isEmpty ? null : venue.text.trim(),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      if (project == null) {
+        await supabase.from('wedding_projects').insert({...values, 'owner_customer_id': user.id});
+      } else {
+        await supabase.from('wedding_projects').update(values)
+            .eq('id', project['id']).eq('owner_customer_id', user.id);
+      }
       await load();
-    }catch(e){if(mounted)setState(()=>error='Project assignment failed: $e');}
+    } catch (e) {
+      if (mounted) setState(() => error = 'Project save failed: $e');
+    } finally {
+      for (final c in [title, client, clientEmail, clientPhone, venue, eventDate]) { c.dispose(); }
+      if (mounted) setState(() => saving = false);
+    }
   }
+
+  Future<void> updateStatus(Map<String, dynamic> project, String status) async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) throw Exception('Please sign in again.');
+      await supabase.from('wedding_projects').update({
+        'status': status, 'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', project['id']).eq('owner_customer_id', user.id);
+      await load();
+    } catch (e) {
+      if (mounted) setState(() => error = 'Could not update project status: $e');
+    }
+  }
+
+  Future<void> assignProject(Map<String, dynamic> project, bool attach) async {
+    if (studioId == null) { setState(() => error = 'Save your studio profile first.'); return; }
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) throw Exception('Please sign in again.');
+      await supabase.from('wedding_projects').update({
+        'studio_id': attach ? studioId : null, 'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', project['id']).eq('owner_customer_id', user.id);
+      await load();
+    } catch (e) {
+      if (mounted) setState(() => error = 'Project assignment failed: $e');
+    }
+  }
+
   @override
-  Widget build(BuildContext context)=>Scaffold(
-    appBar:AppBar(title:const Text('Photographer Studio Portal')),
-    body:loading?const Center(child:CircularProgressIndicator()):ListView(padding:const EdgeInsets.all(16),children:[
-      const Chip(label:Text('Development Mode')),
-      const Text('Set up your studio profile and connect wedding projects. This is a private owner portal; customer invitations and guest access are not published.'),
-      const SizedBox(height:12),
-      TextField(controller:name,decoration:const InputDecoration(labelText:'Studio / photographer name',border:OutlineInputBorder())),
-      const SizedBox(height:10),
-      TextField(controller:email,keyboardType:TextInputType.emailAddress,decoration:const InputDecoration(labelText:'Contact email',border:OutlineInputBorder())),
-      const SizedBox(height:10),
-      TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'Contact phone',border:OutlineInputBorder())),
-      const SizedBox(height:10),
-      TextField(controller:website,keyboardType:TextInputType.url,decoration:const InputDecoration(labelText:'Website (optional)',border:OutlineInputBorder())),
-      const SizedBox(height:12),
-      FilledButton.icon(onPressed:saving?null:saveProfile,icon:const Icon(Icons.save_outlined),label:Text(saving?'Saving…':'Save studio profile')),
-      if(error!=null)Padding(padding:const EdgeInsets.only(top:8),child:Text(error!,style:const TextStyle(color:Colors.red))),
-      const SizedBox(height:18),
-      Text('Wedding projects',style:Theme.of(context).textTheme.titleLarge),
-      if(projects.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(16),child:Text('Create a wedding project in Wedding Studio to manage it here.'))),
-      ...projects.map((p){
-        final attached=p['studio_id']!=null&&p['studio_id'].toString()==studioId;
-        return Card(child:ListTile(
-          leading:const Icon(Icons.favorite_outline),
-          title:Text(p['title'].toString()),
-          subtitle:Text('Status: ${p['status']??'active'}'),
-          trailing:TextButton(onPressed:()=>assignProject(p,!attached),child:Text(attached?'Remove':'Add to studio')),
-        ));
-      }),
-    ]),
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Photographer Studio Portal'),
+      actions: [IconButton(onPressed: loading ? null : load, icon: const Icon(Icons.refresh), tooltip: 'Refresh')]),
+    body: loading ? const Center(child: CircularProgressIndicator()) : ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Chip(label: Text('Studio workspace')),
+        const Text('Manage your own wedding projects, customer contact details and studio assignment. Project access remains private to its owner account.'),
+        const SizedBox(height: 12),
+        TextField(controller: name, decoration: const InputDecoration(labelText: 'Studio / photographer name', border: OutlineInputBorder())),
+        const SizedBox(height: 10),
+        TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Contact email', border: OutlineInputBorder())),
+        const SizedBox(height: 10),
+        TextField(controller: phone, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Contact phone', border: OutlineInputBorder())),
+        const SizedBox(height: 10),
+        TextField(controller: website, keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Website (optional)', border: OutlineInputBorder())),
+        const SizedBox(height: 12),
+        FilledButton.icon(onPressed: saving ? null : saveProfile, icon: const Icon(Icons.save_outlined), label: Text(saving ? 'Saving…' : 'Save studio profile')),
+        if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: Colors.red))),
+        const SizedBox(height: 18),
+        Row(children: [
+          Expanded(child: Text('Wedding projects (${projects.length})', style: Theme.of(context).textTheme.titleLarge)),
+          FilledButton.tonalIcon(onPressed: saving ? null : () => editProject(), icon: const Icon(Icons.add), label: const Text('New project')),
+        ]),
+        if (projects.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('No wedding projects yet. Create your first project here.'))),
+        ...projects.map((p) {
+          final attached = p['studio_id'] != null && p['studio_id'].toString() == studioId;
+          final status = p['status']?.toString() ?? 'active';
+          return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                const Icon(Icons.favorite_outline), const SizedBox(width: 8),
+                Expanded(child: Text(p['title']?.toString() ?? 'Wedding project', style: Theme.of(context).textTheme.titleMedium)),
+                PopupMenuButton<String>(
+                  tooltip: 'Change project status',
+                  onSelected: (value) => updateStatus(p, value),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'active', child: Text('Active')),
+                    PopupMenuItem(value: 'completed', child: Text('Completed')),
+                    PopupMenuItem(value: 'archived', child: Text('Archived')),
+                  ],
+                  child: Chip(label: Text(status)),
+                ),
+              ]),
+              if ((p['client_name'] ?? '').toString().isNotEmpty) Text('Customer: ${p['client_name']}'),
+              if ((p['client_email'] ?? '').toString().isNotEmpty) Text('Email: ${p['client_email']}'),
+              if ((p['client_phone'] ?? '').toString().isNotEmpty) Text('Phone: ${p['client_phone']}'),
+              if ((p['event_date'] ?? '').toString().isNotEmpty) Text('Date: ${p['event_date']}'),
+              if ((p['venue'] ?? '').toString().isNotEmpty) Text('Venue: ${p['venue']}'),
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, children: [
+                OutlinedButton.icon(onPressed: saving ? null : () => editProject(p), icon: const Icon(Icons.edit_outlined), label: const Text('Edit')),
+                OutlinedButton.icon(onPressed: saving ? null : () => assignProject(p, !attached), icon: Icon(attached ? Icons.link_off : Icons.link), label: Text(attached ? 'Remove from studio' : 'Add to studio')),
+              ]),
+            ],
+          )));
+        }),
+      ],
+    ),
   );
 }
