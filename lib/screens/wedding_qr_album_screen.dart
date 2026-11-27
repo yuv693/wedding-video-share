@@ -19,9 +19,9 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
   void initState(){super.initState();load();}
   Future<void> load() async {
     try {
-      final p=await supabase.from('wedding_projects').select('id,title,owner_customer_id').eq('owner_customer_id',user.id).order('created_at',ascending:false);
       final user=supabase.auth.currentUser;
       if(user==null) throw Exception('Please sign in again.');
+      final p=await supabase.from('wedding_projects').select('id,title,owner_customer_id').eq('owner_customer_id',user.id).order('created_at',ascending:false);
       final a=await supabase.from('wedding_albums').select('id,project_id,owner_customer_id,title,guest_uploads_enabled,guest_view_enabled,downloads_enabled,access_pin_enabled,expires_at,revoked_at,created_at').order('created_at',ascending:false);
       final restored=<String,String>{};
       for(final album in a){
@@ -60,7 +60,7 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
       actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Create'))],
     )));
     if(ok!=true||name.text.trim().isEmpty){name.dispose();pin.dispose();return;}
-    if(pin.text.trim().isNotEmpty&&!RegExp(r'^\\d{4,8}
+    if(pin.text.trim().isNotEmpty&&!RegExp(r'^\d{4,8}
     setState(()=>saving=true);
     try{
       final user=supabase.auth.currentUser;
@@ -85,7 +85,7 @@ class _WeddingQrAlbumScreenState extends State<WeddingQrAlbumScreen> {
     ));
     if(ok!=true){pin.dispose();return;}
     final value=pin.text.trim();pin.dispose();
-    if(value.isNotEmpty&&!RegExp(r'^\\d{4,8}
+    if(value.isNotEmpty&&!RegExp(r'^\d{4,8}
     try{await supabase.from('wedding_albums').update({field:value,'updated_at':DateTime.now().toIso8601String()}).eq('id',a['id']);await load();}
     catch(e){if(mounted)setState(()=>error='Update failed: $e');}
   }
