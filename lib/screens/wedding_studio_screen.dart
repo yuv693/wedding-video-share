@@ -145,7 +145,28 @@ class _WeddingStudioHubState extends State<WeddingStudioHub> {
         const Text('More wedding tools', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
         const SizedBox(height: 8),
         _comingSoon(Icons.qr_code_2, 'QR Wedding Album', 'Private guest album and upload permissions'),
-        _comingSoon(Icons.camera_alt_outlined, 'Photographer Studio Portal', 'Create projects, save customer contacts, update status and assign work to your studio'),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.camera_alt_outlined, color: Color(0xFF6F2438)),
+            title: const Text('Photographer Studio Portal'),
+            subtitle: const Text('Manage wedding projects, customers and studio work'),
+            trailing: const Chip(label: Text('Free')),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PhotographerStudioPortalScreen()),
+            ),
+          ),
+        ),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.group_add_outlined, color: Color(0xFF6F2438)),
+            title: const Text('Photographer & Editor Invitations'),
+            subtitle: const Text('Invite by email, choose role and permissions, accept invitations or revoke access'),
+            trailing: const Chip(label: Text('Free')),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const PhotographerStudioPortalScreen()),
+            ),
+          ),
+        ),
         _comingSoon(Icons.auto_awesome, 'AI Wedding Highlights', 'Suggested highlights with customer approval'),
         Card(
           child: ListTile(
