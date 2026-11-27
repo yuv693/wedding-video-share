@@ -83,7 +83,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
       });
       await load();
     }catch(e){if(mounted)setState(()=>error='Save failed: $e');}
-    finally{for(final c in [title,bride,groom,venue,date,contact,map]){c.dispose();}if(mounted)setState(()=>saving=false);}
+    finally{for(final c in [title,bride,groom,venue,address,date,functionName,contact,map]){c.dispose();}if(mounted)setState(()=>saving=false);}
   }
   Future<void> editInvitation(Map<String,dynamic> row) async {
     final details = row['event_details'] is Map
