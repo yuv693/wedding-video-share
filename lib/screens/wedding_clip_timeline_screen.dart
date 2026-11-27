@@ -134,6 +134,8 @@ class _WeddingClipTimelineScreenState extends State<WeddingClipTimelineScreen> {
     try {
       final user = supabase.auth.currentUser;
       if (user == null) throw Exception('Please sign in again.');
+      final projectRow = await supabase.from('wedding_projects').select('owner_customer_id').eq('id', widget.projectId).single();
+      final projectOwnerId = projectRow['owner_customer_id'].toString();
       final existing = await supabase
           .from('wedding_editor_projects')
           .select('id,timeline_json')
