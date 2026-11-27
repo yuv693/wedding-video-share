@@ -197,7 +197,7 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invitation saved. Share the instructions with the photographer.')));
         await Share.share(
-          'You are invited to collaborate on the wedding project "${project['title']}".\\n\\n'
+          'You are invited to collaborate on the wedding project "${project['title']}".\n\n'
           'Open Wedding Video Share, sign in using $targetEmail, then open Photographer Studio Portal > Invitations for you and tap Accept. '
           'Your invitation expires in 14 days. Access is limited to the permissions selected by the customer.',
           subject: 'Wedding Video Share project invitation',
