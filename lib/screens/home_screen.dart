@@ -250,6 +250,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _switchAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Switch account?'),
+        content: const Text('Save your current wedding work first. You will return to the welcome screen and can recover another account or create a separate customer / photographer account.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Switch account')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await supabase.auth.signOut();
+  }
+
   Future<void> _connectDrive() async {
     setState(() { _busy = true; _status = null; });
     try {
@@ -954,6 +970,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               if (_selectedTab == 2) ...[
               const SizedBox(height: 12),
               AccountAccessCard(onLinked: _refresh),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _busy || _uploading ? null : _switchAccount,
+                icon: const Icon(Icons.switch_account),
+                label: const Text('Switch customer / photographer account'),
+              ),
               if (_order?['upload_locked'] == true) ...[
                 const SizedBox(height: 12),
                 Card(
