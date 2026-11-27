@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import '../services/backend.dart';
 
 class PhotographerStudioPortalScreen extends StatefulWidget {
@@ -167,7 +168,7 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
           CheckboxListTile(contentPadding: EdgeInsets.zero, value: canEdit,
             title: const Text('Can edit timeline / reels'),
             onChanged: role == 'viewer' ? null : (v) => setDialogState(() => canEdit = v ?? false)),
-          const Text('The invitee must sign in with this exact email and accept. Pending invitations expire after 14 days.', style: TextStyle(fontSize: 12)),
+          const Text('The invitee must verify this exact email, sign in and accept. Invitation expires after 14 days.', style: TextStyle(fontSize: 12)),
         ])),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -192,8 +193,16 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
         'can_edit': role == 'viewer' ? false : canEdit,
       });
       await load();
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invitation created. The photographer can accept it after signing in with the invited email.')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invitation saved. Share the instructions with the photographer.')));
+        await Share.share(
+          'You are invited to collaborate on the wedding project "${project['title']}".\\n\\n'
+          'Open Wedding Video Share, sign in using $targetEmail, then open Photographer Studio Portal > Invitations for you and tap Accept. '
+          'Your invitation expires in 14 days. Access is limited to the permissions selected by the customer.',
+          subject: 'Wedding Video Share project invitation',
+        );
+      }
     } catch (e) {
       if (mounted) setState(() => error = 'Invitation failed: $e');
     }
@@ -206,7 +215,7 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Invitation accepted. The shared wedding project is now available.')));
     } catch (e) {
-      if (mounted) setState(() => error = 'Could not accept invitation: $e');
+      if (mounted) setState(() => error = 'Could not accept invitation. Verify the invited email and try again: $e');
     }
   }
 
