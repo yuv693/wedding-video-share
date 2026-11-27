@@ -194,11 +194,11 @@ class _WeddingStudioHubState extends State<WeddingStudioHub> {
         leading: Icon(icon, color: const Color(0xFF6F2438)),
         title: Text(title),
         subtitle: Text(subtitle),
-        trailing: const Row(
+        trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Chip(label: Text(title == 'Photographer Studio Portal' ? 'Project workspace' : 'Development mode')),
-            Icon(Icons.chevron_right),
+            const Icon(Icons.chevron_right),
           ],
         ),
         onTap: () {
