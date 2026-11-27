@@ -15,6 +15,7 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
   bool loading = true, saving = false;
   String? error, studioId;
   List<Map<String, dynamic>> projects = [];
+  List<Map<String, dynamic>> invitations = [];
 
   @override
   void initState() { super.initState(); load(); }
@@ -30,8 +31,11 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
           .select('id,studio_name,contact_email,contact_phone,website_url')
           .eq('owner_customer_id', user.id).maybeSingle();
       final rows = await supabase.from('wedding_projects')
-          .select('id,title,studio_id,status,event_date,venue,client_name,client_email,client_phone,created_at')
-          .eq('owner_customer_id', user.id).order('created_at', ascending: false);
+          .select('id,owner_customer_id,title,studio_id,status,event_date,venue,client_name,client_email,client_phone,created_at')
+          .order('created_at', ascending: false);
+      final inviteRows = await supabase.from('wedding_project_invitations')
+          .select('id,project_id,inviter_user_id,invitee_email,role,status,can_view,can_upload,can_edit,expires_at')
+          .inFilter('status', ['pending','accepted']).order('created_at', ascending: false);
       if (!mounted) return;
       if (profile != null) {
         studioId = profile['id'].toString();
@@ -40,7 +44,10 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
         phone.text = profile['contact_phone']?.toString() ?? '';
         website.text = profile['website_url']?.toString() ?? '';
       } else { studioId = null; }
-      setState(() => projects = List<Map<String, dynamic>>.from(rows));
+      setState(() {
+        projects = List<Map<String, dynamic>>.from(rows);
+        invitations = List<Map<String, dynamic>>.from(inviteRows);
+      });
     } catch (e) {
       if (mounted) setState(() => error = 'Could not load studio portal: $e');
     } finally { if (mounted) setState(() => loading = false); }
@@ -132,6 +139,89 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
     }
   }
 
+
+  Future<void> invitePhotographer(Map<String, dynamic> project) async {
+    final emailController = TextEditingController();
+    String role = 'photographer';
+    bool canUpload = true, canEdit = true;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDialogState) => AlertDialog(
+        title: const Text('Invite photographer / editor'),
+        content: SizedBox(width: 420, child: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(controller: emailController, keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(labelText: 'Photographer login email')),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            value: role, decoration: const InputDecoration(labelText: 'Role'),
+            items: const [
+              DropdownMenuItem(value: 'photographer', child: Text('Photographer')),
+              DropdownMenuItem(value: 'editor', child: Text('Video editor')),
+              DropdownMenuItem(value: 'viewer', child: Text('Viewer only')),
+            ],
+            onChanged: (v) => setDialogState(() => role = v ?? 'photographer'),
+          ),
+          CheckboxListTile(contentPadding: EdgeInsets.zero, value: canUpload,
+            title: const Text('Can upload wedding media'),
+            onChanged: role == 'viewer' ? null : (v) => setDialogState(() => canUpload = v ?? false)),
+          CheckboxListTile(contentPadding: EdgeInsets.zero, value: canEdit,
+            title: const Text('Can edit timeline / reels'),
+            onChanged: role == 'viewer' ? null : (v) => setDialogState(() => canEdit = v ?? false)),
+          const Text('The invitee must sign in with this exact email and accept. Pending invitations expire after 14 days.', style: TextStyle(fontSize: 12)),
+        ])),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create invitation')),
+        ],
+      )),
+    );
+    if (accepted != true) { emailController.dispose(); return; }
+    final targetEmail = emailController.text.trim().toLowerCase();
+    emailController.dispose();
+    if (!targetEmail.contains('@') || targetEmail.endsWith('@')) {
+      setState(() => error = 'Enter a valid photographer email.');
+      return;
+    }
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) throw Exception('Please sign in again.');
+      await supabase.from('wedding_project_invitations').insert({
+        'project_id': project['id'], 'inviter_user_id': user.id,
+        'invitee_email': targetEmail, 'role': role, 'can_view': true,
+        'can_upload': role == 'viewer' ? false : canUpload,
+        'can_edit': role == 'viewer' ? false : canEdit,
+      });
+      await load();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invitation created. The photographer can accept it after signing in with the invited email.')));
+    } catch (e) {
+      if (mounted) setState(() => error = 'Invitation failed: $e');
+    }
+  }
+
+  Future<void> acceptInvitation(Map<String, dynamic> invitation) async {
+    try {
+      await supabase.rpc('accept_wedding_project_invitation', params: {'p_invitation_id': invitation['id']});
+      await load();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invitation accepted. The shared wedding project is now available.')));
+    } catch (e) {
+      if (mounted) setState(() => error = 'Could not accept invitation: $e');
+    }
+  }
+
+  Future<void> revokeInvitation(Map<String, dynamic> invitation) async {
+    try {
+      await supabase.from('wedding_project_invitations').update({
+        'status': 'revoked', 'revoked_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', invitation['id']);
+      await load();
+    } catch (e) {
+      if (mounted) setState(() => error = 'Could not revoke access: $e');
+    }
+  }
+
   Future<void> updateStatus(Map<String, dynamic> project, String status) async {
     try {
       final user = supabase.auth.currentUser;
@@ -167,7 +257,7 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
       padding: const EdgeInsets.all(16),
       children: [
         const Chip(label: Text('Studio workspace')),
-        const Text('Manage your own wedding projects, customer contact details and studio assignment. Project access remains private to its owner account.'),
+        const Text('Customer and photographer use the same wedding project. The customer controls invitations and can revoke access at any time.'),
         const SizedBox(height: 12),
         TextField(controller: name, decoration: const InputDecoration(labelText: 'Studio / photographer name', border: OutlineInputBorder())),
         const SizedBox(height: 10),
@@ -180,12 +270,21 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
         FilledButton.icon(onPressed: saving ? null : saveProfile, icon: const Icon(Icons.save_outlined), label: Text(saving ? 'Saving…' : 'Save studio profile')),
         if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: Colors.red))),
         const SizedBox(height: 18),
+        if (invitations.any((i) => i['inviter_user_id'] != supabase.auth.currentUser?.id && i['status'] == 'pending')) ...[
+          Text('Invitations for you', style: Theme.of(context).textTheme.titleLarge),
+          ...invitations.where((i) => i['inviter_user_id'] != supabase.auth.currentUser?.id && i['status'] == 'pending').map((i) => Card(child: ListTile(
+            leading: const Icon(Icons.mail_outline), title: Text('Wedding project invitation • ${i['role']}'),
+            subtitle: Text('Invited email: ${i['invitee_email']}'),
+            trailing: FilledButton(onPressed: saving ? null : () => acceptInvitation(i), child: const Text('Accept')),
+          ))), const SizedBox(height: 12),
+        ],
         Row(children: [
           Expanded(child: Text('Wedding projects (${projects.length})', style: Theme.of(context).textTheme.titleLarge)),
           FilledButton.tonalIcon(onPressed: saving ? null : () => editProject(), icon: const Icon(Icons.add), label: const Text('New project')),
         ]),
         if (projects.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('No wedding projects yet. Create your first project here.'))),
         ...projects.map((p) {
+          final isOwner = p['owner_customer_id'] == supabase.auth.currentUser?.id;
           final attached = p['studio_id'] != null && p['studio_id'].toString() == studioId;
           final status = p['status']?.toString() ?? 'active';
           return Card(child: Padding(padding: const EdgeInsets.all(12), child: Column(
@@ -194,7 +293,7 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
               Row(children: [
                 const Icon(Icons.favorite_outline), const SizedBox(width: 8),
                 Expanded(child: Text(p['title']?.toString() ?? 'Wedding project', style: Theme.of(context).textTheme.titleMedium)),
-                PopupMenuButton<String>(
+                if (isOwner) PopupMenuButton<String>(
                   tooltip: 'Change project status',
                   onSelected: (value) => updateStatus(p, value),
                   itemBuilder: (_) => const [
@@ -212,9 +311,19 @@ class _PhotographerStudioPortalScreenState extends State<PhotographerStudioPorta
               if ((p['venue'] ?? '').toString().isNotEmpty) Text('Venue: ${p['venue']}'),
               const SizedBox(height: 8),
               Wrap(spacing: 8, children: [
-                OutlinedButton.icon(onPressed: saving ? null : () => editProject(p), icon: const Icon(Icons.edit_outlined), label: const Text('Edit')),
-                OutlinedButton.icon(onPressed: saving ? null : () => assignProject(p, !attached), icon: Icon(attached ? Icons.link_off : Icons.link), label: Text(attached ? 'Remove from studio' : 'Add to studio')),
+                if (isOwner) OutlinedButton.icon(onPressed: saving ? null : () => editProject(p), icon: const Icon(Icons.edit_outlined), label: const Text('Edit project')),
+                if (isOwner) OutlinedButton.icon(onPressed: saving ? null : () => assignProject(p, !attached), icon: Icon(attached ? Icons.link_off : Icons.link), label: Text(attached ? 'Remove from studio' : 'Add to studio')),
+                if (isOwner) OutlinedButton.icon(onPressed: saving ? null : () => invitePhotographer(p), icon: const Icon(Icons.person_add_alt_1), label: const Text('Invite photographer')),
+                if (!isOwner) const Chip(label: Text('Shared with you')),
               ]),
+              if (isOwner) ...invitations.where((i) => i['project_id'] == p['id']).map((i) => ListTile(
+                dense: true, contentPadding: EdgeInsets.zero,
+                leading: Icon(i['status'] == 'accepted' ? Icons.verified_user_outlined : Icons.hourglass_top),
+                title: Text(i['invitee_email']?.toString() ?? 'Collaborator'),
+                subtitle: Text('${i['role']} • ${i['status']} • upload: ${i['can_upload']} • edit: ${i['can_edit']}'),
+                trailing: IconButton(tooltip: 'Revoke access', icon: const Icon(Icons.person_remove_alt_1),
+                  onPressed: saving ? null : () => revokeInvitation(i)),
+              )),
             ],
           )));
         }),
