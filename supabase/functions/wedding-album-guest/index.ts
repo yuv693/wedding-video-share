@@ -15,7 +15,7 @@ async function folder(adminClient:any,owner:string,g:any){if(g.folder)return g.f
 async function getAlbum(adminClient:any,token:string){if(!/^[a-f0-9]{64}$/.test(token))return null;const {data,error}=await adminClient.rpc("wedding_album_guest_access_get",{p_token_hash:await hash(token)});return !error&&Array.isArray(data)&&data.length===1?data[0]:null}
 const base=(token:string,action?:string)=>Deno.env.get("SUPABASE_URL")+"/functions/v1/wedding-album-guest?token="+encodeURIComponent(token)+(action?"&action="+action:"");
 async function owner(req:Request,b:any){
- const auth=req.headers.get("Authorization")??"",jwt=auth.replace(/^Bearer\\s+/i,"");
+ const auth=req.headers.get("Authorization")??"",jwt=auth.replace(/^Bearer\s+/i,"");
  if(!jwt||jwt===auth)return json({error:"AUTH_REQUIRED"},401);
  const a=admin(),{data,error}=await a.auth.getUser(jwt);
  if(error||!data.user)return json({error:"INVALID_SESSION"},401);
