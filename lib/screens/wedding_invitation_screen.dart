@@ -15,7 +15,9 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
   void initState(){super.initState();load();}
   Future<void> load() async{
     try{
-      final p=await supabase.from('wedding_projects').select('id,title').order('created_at',ascending:false);
+      final user=supabase.auth.currentUser;
+      if(user==null) throw Exception('Please sign in again.');
+      final p=await supabase.from('wedding_projects').select('id,title').eq('owner_customer_id',user.id).order('created_at',ascending:false);
       final rows=await supabase.from('digital_wedding_invitations').select('id,project_id,title,template_key,event_details,rsvp_enabled,published_at,public_slug,created_at').order('created_at',ascending:false);
       if(!mounted)return;
       setState(() { projects=List<Map<String,dynamic>>.from(p); invitations=List<Map<String,dynamic>>.from(rows); });
