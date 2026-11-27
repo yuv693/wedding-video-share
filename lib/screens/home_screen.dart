@@ -855,14 +855,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     ),
                     if (!paid)
                       FilledButton.icon(
-                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _startPayment,
+                        onPressed: _busy || _uploading ? null : _startPayment,
                         icon: const Icon(Icons.lock_rounded),
                         label: const Text('Pay ₹290 securely'),
                         style: FilledButton.styleFrom(backgroundColor: burgundy),
                       )
                     else
                       OutlinedButton.icon(
-                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _makeShareLink,
+                        onPressed: _busy || _uploading ? null : _makeShareLink,
                         icon: const Icon(Icons.link),
                         label: const Text('Create / refresh private link'),
                       ),
@@ -870,7 +870,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
-                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _createAndShareGuestLink,
+                        onPressed: _busy || _uploading ? null : _createAndShareGuestLink,
                         icon: const Icon(Icons.share_rounded),
                         label: const Text('Share link on WhatsApp / other apps'),
                         style: FilledButton.styleFrom(backgroundColor: burgundy),
