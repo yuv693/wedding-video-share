@@ -83,12 +83,13 @@ async function renderInvitation(slug: string, received: boolean) {
     /^https:\/\/mnaswhizatnwfwmjmtvm\.supabase\.co\/storage\/v1\/object\/public\/wedding-invitation-assets\/[A-Za-z0-9_./-]+$/i.test(d.photo_url)
     ? d.photo_url : "";
   const photoHtml = photoUrl ? `<img class="hero-photo" src="${escapeHtml(photoUrl)}" alt="Wedding couple">` : "";
-  const localized = {
+  const localeText: Record<string, { together: string; rsvp: string; name: string; email: string; attend: string; yes: string; no: string; count: string; message: string; submit: string }> = {
     en: { together: "Together with their families", rsvp: "Will you be joining us?", name: "Your name", email: "Email (optional)", attend: "Will you attend?", yes: "Joyfully accept", no: "Regretfully decline", count: "Number of guests", message: "Message (optional)", submit: "Send RSVP" },
     gu: { together: "પરિવાર સાથે", rsvp: "શું તમે અમારી સાથે જોડાશો?", name: "તમારું નામ", email: "ઈમેલ (વૈકલ્પિક)", attend: "તમે હાજર રહેશો?", yes: "હા, આનંદથી", no: "માફ કરશો, આવી શકીશ નહીં", count: "મહેમાનોની સંખ્યા", message: "સંદેશ (વૈકલ્પિક)", submit: "જવાબ મોકલો" },
     hi: { together: "परिवार सहित", rsvp: "क्या आप हमारे साथ शामिल होंगे?", name: "आपका नाम", email: "ईमेल (वैकल्पिक)", attend: "क्या आप आएँगे?", yes: "हाँ, खुशी से", no: "क्षमा करें, नहीं आ सकूँगा", count: "मेहमानों की संख्या", message: "संदेश (वैकल्पिक)", submit: "जवाब भेजें" },
     ur: { together: "اپنے خاندانوں کے ساتھ", rsvp: "کیا آپ ہمارے ساتھ شامل ہوں گے؟", name: "آپ کا نام", email: "ای میل (اختیاری)", attend: "کیا آپ تشریف لائیں گے؟", yes: "خوشی سے قبول", no: "معذرت، حاضر نہیں ہو سکوں گا", count: "مہمانوں کی تعداد", message: "پیغام (اختیاری)", submit: "جواب بھیجیں" },
-  }[language];
+  };
+  const localized = localeText[language] ?? localeText.en;
   const title = escapeHtml(invitation.title || "Wedding Invitation");
   const eventList = Array.isArray(d.functions) && d.functions.length
     ? d.functions.slice(0, 12)
