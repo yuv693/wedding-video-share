@@ -160,8 +160,8 @@ as $$
 begin
   update public.wedding_editor_projects
      set source_drive_file_ids = array(
-       select distinct x
-       from unnest(array_append(coalesce(source_drive_file_ids, '{}'::text[]), p_file_id)) as x
+       select distinct u.value
+       from unnest(array_append(coalesce(source_drive_file_ids, '{}'::text[]), p_file_id)) as u(value)
      ),
      updated_at = now()
    where id = p_editor_project_id;
