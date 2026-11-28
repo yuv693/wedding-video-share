@@ -3,14 +3,16 @@ import 'dart:async';
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backend.dart';
 import '../widgets/account_access_card.dart';
 import '../services/video_upload_service.dart';
 import '../services/persistent_video_picker.dart';
+import 'wedding_studio_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,12 +23,13 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final _uploadService = VideoUploadService();
   final _appLinks = AppLinks();
+  Razorpay? _razorpay;
+  String? _manualPaymentStatus;
   StreamSubscription<Uri>? _linkSubscription;
   Timer? _statusRefreshTimer;
   bool _refreshing = false;
   bool _busy = false, _uploading = false, _autoDeleteConsent = false, _pauseRequested = false;
   String? _currentUploadName;
-  String? _manualPaymentStatus;
   int _selectedTab = 0;
   double _uploadProgress = 0;
   String? _status, _driveEmail, _shareUrl, _sharePin;
@@ -57,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _statusRefreshTimer?.cancel();
     _linkSubscription?.cancel();
+    _razorpay?.clear();
     super.dispose();
   }
 
@@ -153,7 +157,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _driveEmail = null;
         _shareUrl = null;
         _sharePin = null;
-        _manualPaymentStatus = null;
         _status = 'New wedding account created. Your saved Google Drive is connected.';
       });
       await _refresh();
@@ -246,6 +249,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _switchAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Switch account?'),
+        content: const Text('Save your current wedding work first. You will return to the welcome screen and can recover another account or create a separate customer / photographer account.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Switch account')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await supabase.auth.signOut();
+  }
+
   Future<void> _connectDrive() async {
     setState(() { _busy = true; _status = null; });
     try {
@@ -276,23 +295,122 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadManualPaymentStatus() async {
     try {
-      final response = await supabase.functions.invoke('manual-payments', body: {'action': 'status'});
+      final response = await supabase.functions.invoke(
+        'manual-payments',
+        body: {'action': 'status'},
+      );
       final data = _map(response.data);
       if (response.status == 200 && mounted) {
         setState(() => _manualPaymentStatus = data['status']?.toString());
       }
     } catch (_) {
-      // Payment status remains protected by the server; refresh can retry.
+      // Keep the last known status; the next refresh can retry.
+    }
+  }
+
+  Future<void> _startRazorpayPayment() async {
+    if (!_videos.any((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null) || _order == null) {
+      setState(() => _status = 'Upload your wedding video first. Payment is needed only when you share it.');
+      return;
+    }
+    if (_order?['payment_status'] == 'paid') {
+      setState(() => _status = 'Your ₹290 payment is already verified. No second payment is needed.');
+      return;
+    }
+    if (_manualPaymentStatus == 'pending') {
+      setState(() => _status = 'Your Paytm/UPI payment request is already pending verification. Please do not pay again.');
+      return;
+    }
+    setState(() { _busy = true; _status = null; });
+    try {
+      final response = await supabase.functions.invoke('razorpay-payments', body: {'action': 'create_order'});
+      final data = _map(response.data);
+      if (response.status != 200 || data['ok'] != true) {
+        throw Exception(data['note']?.toString() ?? data['error']?.toString() ?? 'Razorpay checkout is not ready.');
+      }
+      final keyId = data['keyId']?.toString();
+      final gatewayOrderId = data['razorpayOrderId']?.toString();
+      if (keyId == null || gatewayOrderId == null) throw Exception('Razorpay order details are incomplete.');
+      final checkout = Razorpay();
+      _razorpay = checkout;
+      checkout.on(Razorpay.EVENT_PAYMENT_SUCCESS, (PaymentSuccessResponse result) async {
+        try {
+          final verify = await supabase.functions.invoke('razorpay-payments', body: {
+            'action': 'verify_payment',
+            'razorpayOrderId': result.orderId ?? gatewayOrderId,
+            'razorpayPaymentId': result.paymentId,
+            'razorpaySignature': result.signature,
+          });
+          final verified = _map(verify.data);
+          if (verify.status != 200 || verified['ok'] != true || verified['verified'] != true) {
+            throw Exception(verified['error']?.toString() ?? 'Server could not verify this payment yet.');
+          }
+          await _loadOrder();
+          if (mounted) setState(() => _status = '₹290 payment verified securely by Razorpay. Your private sharing is unlocked.');
+        } catch (e) {
+          if (mounted) setState(() => _status = 'Payment received by Razorpay; server verification is pending. Tap Refresh shortly. Do not pay again. ($e)');
+        } finally {
+          checkout.clear();
+          if (identical(_razorpay, checkout)) _razorpay = null;
+          if (mounted) setState(() => _busy = false);
+        }
+      });
+      checkout.on(Razorpay.EVENT_PAYMENT_ERROR, (PaymentFailureResponse result) async {
+        checkout.clear();
+        if (identical(_razorpay, checkout)) _razorpay = null;
+        await _loadOrder();
+        if (mounted) setState(() {
+          _busy = false;
+          _status = 'Razorpay payment was not completed. If money was deducted, do not pay again; refresh and check payment status.';
+        });
+      });
+      checkout.on(Razorpay.EVENT_EXTERNAL_WALLET, (ExternalWalletResponse result) {
+        if (mounted) setState(() => _status = 'External wallet selected: ${result.walletName ?? 'wallet'}. Complete payment in the wallet.');
+      });
+      checkout.open({
+        'key': keyId,
+        'amount': 29000,
+        'currency': 'INR',
+        'name': 'Wedding Video Share',
+        'description': 'One wedding video upload and share',
+        'order_id': gatewayOrderId,
+        'theme': {'color': '#6F2438'},
+      });
+      // Keep the payment action locked until Razorpay returns a success or failure callback.
+    } catch (e) {
+      if (mounted) setState(() { _busy = false; _status = 'Razorpay: $e'; });
     }
   }
 
   Future<void> _startPayment() async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Choose payment method'),
+        content: const Text('Pay the one-time ₹290 Wedding Video Share fee. Please do not pay twice.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, 'cancel'), child: const Text('Cancel')),
+          OutlinedButton(onPressed: () => Navigator.pop(ctx, 'paytm'), child: const Text('Paytm QR / UPI')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, 'razorpay'), child: const Text('Razorpay')),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (choice == 'razorpay') await _startRazorpayPayment();
+    if (choice == 'paytm') await _startPaytmPayment();
+  }
+
+  Future<void> _startPaytmPayment() async {
     if (!_videos.any((v) => v['upload_status'] == 'uploaded' && v['deleted_at'] == null) || _order == null) {
-      setState(() => _status = 'Upload your wedding video first. Payment is needed when you share it.');
+      setState(() => _status = 'Upload your wedding video first. Payment is needed only when you share it.');
+      return;
+    }
+    if (_order?['payment_status'] == 'paid') {
+      setState(() => _status = 'Your ₹290 payment is already verified. No second payment is needed.');
       return;
     }
     if (_manualPaymentStatus == 'pending') {
-      setState(() => _status = 'Your payment request is already submitted. Please wait for manual verification.');
+      setState(() => _status = 'Your ₹290 payment request is already submitted and waiting for manual verification. Please do not pay again.');
       return;
     }
 
@@ -309,20 +427,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         'tn': 'Wedding Video Share',
       },
     );
-    final confirmedPaid = await showDialog<bool>(
+
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Pay ₹290 by UPI'),
+        title: const Text('Pay ₹290 by Paytm QR / UPI'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Scan this QR with any UPI app and pay exactly ₹290.'),
+              const Text('Scan this QR using Paytm, Google Pay, PhonePe or another UPI app.'),
               const SizedBox(height: 12),
               QrImageView(data: upiUri.toString(), size: 220),
               const SizedBox(height: 8),
-              const Text('Kausharbanu Yunus Malek', style: TextStyle(fontWeight: FontWeight.w700)),
-              SelectableText(upiId),
+              const Text(payeeName, style: TextStyle(fontWeight: FontWeight.w700)),
+              const SelectableText(upiId),
               TextButton.icon(
                 onPressed: () => Clipboard.setData(const ClipboardData(text: upiId)),
                 icon: const Icon(Icons.copy),
@@ -333,7 +452,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   final launched = await launchUrl(upiUri, mode: LaunchMode.externalApplication);
                   if (!launched && mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('No UPI app could open the payment link. Scan the QR instead.')),
+                      const SnackBar(content: Text('No UPI app opened. Please scan the QR instead.')),
                     );
                   }
                 },
@@ -342,8 +461,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
               const SizedBox(height: 8),
               const Text(
-                'After you pay, tap “I have paid”. Your request will remain pending until the owner checks the payment in Paytm.',
-                textAlign: TextAlign.center,
+                'After paying exactly ₹290, return here and tap “I have paid”. The payment is manually checked before video sharing is unlocked.',
                 style: TextStyle(fontSize: 12, color: Colors.black54),
               ),
             ],
@@ -361,25 +479,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ],
       ),
     );
-    if (confirmedPaid != true || !mounted) return;
+    if (confirmed != true || !mounted) return;
 
     setState(() { _busy = true; _status = null; });
     try {
-      final response = await supabase.functions.invoke('manual-payments', body: {
-        'action': 'submit',
-      });
+      final response = await supabase.functions.invoke(
+        'manual-payments',
+        body: {'action': 'submit'},
+      );
       final data = _map(response.data);
       if (response.status != 200 || data['ok'] != true) {
-        throw Exception(data['note']?.toString() ?? data['error']?.toString() ?? 'Could not submit payment request.');
+        throw Exception(data['note']?.toString() ?? data['error']?.toString() ?? 'Could not submit payment confirmation.');
       }
-      if (mounted) {
-        setState(() {
-          _manualPaymentStatus = data['status']?.toString() ?? 'pending';
-          _status = 'Payment request submitted. Sharing will unlock only after the owner verifies the ₹290 payment.';
+      if (data['status'] == 'verified') {
+        await _loadOrder();
+        if (mounted) setState(() => _status = 'Your ₹290 payment is already verified. No second payment is needed.');
+      } else {
+        if (mounted) setState(() {
+          _manualPaymentStatus = 'pending';
+          _status = '₹290 payment confirmation submitted. Waiting for admin verification; do not pay again.';
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _status = 'Payment request: $e');
+      if (mounted) setState(() => _status = 'Payment confirmation: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -402,7 +524,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() { _busy = true; _status = null; _uploadProgress = 0; });
     try {
       if (_order == null) {
-        final prepared = await supabase.functions.invoke('manual-payments', body: {'action': 'prepare_upload'});
+        final prepared = await supabase.functions.invoke('razorpay-payments', body: {'action': 'prepare_upload'});
         final preparedData = _map(prepared.data);
         if (prepared.status != 200 || preparedData['ok'] != true) {
           throw Exception(preparedData['note']?.toString() ?? preparedData['error']?.toString() ?? 'Could not prepare your upload.');
@@ -724,6 +846,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home_rounded), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.video_library_outlined), selectedIcon: Icon(Icons.video_library_rounded), label: 'Videos'),
           NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Account'),
+          NavigationDestination(icon: Icon(Icons.movie_creation_outlined), selectedIcon: Icon(Icons.movie_creation), label: 'Studio'),
         ],
       ),
       body: SafeArea(
@@ -877,23 +1000,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       title: const Text('I agree: automatically delete each Google Drive video after its full receiver download is verified.'),
                       subtitle: const Text('Only the Google Drive copy is deleted. The original on your phone is not touched. If the download is interrupted or cannot be verified, the Drive copy is kept.'),
                     ),
-                    if (!paid && _manualPaymentStatus == 'pending')
-                      const ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.hourglass_top_rounded, color: Colors.orange),
-                        title: Text('UPI payment submitted'),
-                        subtitle: Text('Waiting for manual verification. Refresh this screen for status updates.'),
-                      )
-                    else if (!paid)
-                      FilledButton.icon(
-                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _startPayment,
-                        icon: const Icon(Icons.qr_code_2_rounded),
-                        label: const Text('Pay ₹290 by QR / UPI'),
-                        style: FilledButton.styleFrom(backgroundColor: burgundy),
-                      )
+                    if (!paid) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _busy || _uploading ? null : _startRazorpayPayment,
+                          icon: const Icon(Icons.payment_rounded),
+                          label: const Text('Pay ₹290 with Razorpay'),
+                          style: FilledButton.styleFrom(backgroundColor: burgundy),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: _busy || _uploading ? null : _startPaytmPayment,
+                          icon: const Icon(Icons.qr_code_rounded),
+                          label: const Text('Pay ₹290 with Paytm QR / UPI'),
+                        ),
+                      ),
+                    ]
                     else
                       OutlinedButton.icon(
-                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _makeShareLink,
+                        onPressed: _busy || _uploading ? null : _makeShareLink,
                         icon: const Icon(Icons.link),
                         label: const Text('Create / refresh private link'),
                       ),
@@ -901,7 +1030,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
-                        onPressed: _busy || _uploading || !_autoDeleteConsent ? null : _createAndShareGuestLink,
+                        onPressed: _busy || _uploading ? null : _createAndShareGuestLink,
                         icon: const Icon(Icons.share_rounded),
                         label: const Text('Share link on WhatsApp / other apps'),
                         style: FilledButton.styleFrom(backgroundColor: burgundy),
@@ -977,9 +1106,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               ],
               ],
+              if (_selectedTab == 3) ...[
+                const SizedBox(height: 8),
+                const WeddingStudioHub(),
+                const SizedBox(height: 20),
+              ],
               if (_selectedTab == 2) ...[
               const SizedBox(height: 12),
               AccountAccessCard(onLinked: _refresh),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _busy || _uploading ? null : _switchAccount,
+                icon: const Icon(Icons.switch_account),
+                label: const Text('Switch customer / photographer account'),
+              ),
               if (_order?['upload_locked'] == true) ...[
                 const SizedBox(height: 12),
                 Card(

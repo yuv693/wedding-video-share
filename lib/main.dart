@@ -124,8 +124,14 @@ class _AuthGateState extends State<AuthGate> {
       if (supabase.auth.currentSession == null) {
         await supabase.auth.signInAnonymously();
       }
-      await _startGoogleDriveConsent();
+      // Collaboration and free studio modules must remain usable even when
+      // this collaborator has not connected a Google Drive account.
       if (mounted) setState(() => _signedIn = true);
+      try {
+        await _startGoogleDriveConsent();
+      } catch (e) {
+        debugPrint('Google Drive setup deferred: $e');
+      }
     } on AuthException catch (e) {
       if (mounted) setState(() => _error =
           'Account setup is not enabled yet. Please contact support. (' + e.message + ')');
