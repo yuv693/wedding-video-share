@@ -144,12 +144,12 @@ jobs:
             adb shell pidof com.weddingvideoshare.app
 
       - name: Publish direct-install Customer APK on GitHub Releases
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/feature/unified-wedding-share-free-modules'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: customer-latest
-          target_commitish: main
-          name: Wedding Video Share - Customer App
+          tag_name: customer-feature-latest
+          target_commitish: feature/unified-wedding-share-free-modules
+          name: Wedding Video Share - Customer App (Feature Test)
           body: |
             Customer Android APK for direct installation.
             This is a test distribution build, not a Play Store release.
