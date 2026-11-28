@@ -48,7 +48,7 @@ Deno.serve(async(req:Request)=>{
    const sessionId=String(body.sessionId??""),fileId=String(body.fileId??"");
    const {data:sessions,error}=await admin.rpc("wedding_editor_media_session_get",{p_session_id:sessionId,p_editor_project_id:editorId});
    const session=Array.isArray(sessions)?sessions[0]:null;
-   if(error||!session||! /^[\\w-]{10,}$/.test(fileId))return json({error:"UPLOAD_SESSION_NOT_FOUND"},404);
+   if(error||!session||! /^[\w-]{10,}$/.test(fileId))return json({error:"UPLOAD_SESSION_NOT_FOUND"},404);
    const metaRes=await driveFetch("https://www.googleapis.com/drive/v3/files/"+encodeURIComponent(fileId)+"?fields=id,name,mimeType,size,parents,owners(emailAddress),trashed",drive.token),meta=await metaRes.json();
    if(!metaRes.ok||meta.trashed||String(meta.size)!==String(session.expected_size_bytes)||meta.name!==session.original_filename||meta.mimeType!==session.mime_type||!Array.isArray(meta.owners)||!meta.owners.some((o:any)=>String(o.emailAddress).toLowerCase()===drive.email.toLowerCase()))return json({error:"DRIVE_FILE_NOT_VERIFIED"},400);
    const {error:insertError}=await admin.from("wedding_editor_media_assets").insert({editor_project_id:editorId,project_id:editor.project_id,owner_customer_id:editor.owner_customer_id,drive_file_id:fileId,original_filename:session.original_filename,mime_type:session.mime_type,file_size_bytes:Number(session.expected_size_bytes),media_kind:session.media_kind});
