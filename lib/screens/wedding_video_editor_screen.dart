@@ -318,6 +318,7 @@ class _WeddingVideoEditorScreenState extends State<WeddingVideoEditorScreen> {
             onPressed: _working ? null : () => Navigator.of(context).push(
               MaterialPageRoute(
                 builder: (_) => WeddingMultiTrackExportScreen(
+                  projectId: widget.projectId,
                   projectTitle: widget.projectTitle,
                 ),
               ),
