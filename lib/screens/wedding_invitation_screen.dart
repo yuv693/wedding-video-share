@@ -24,12 +24,24 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
     }catch(e){error='Could not load invitations: $e';}
     finally{if(mounted)setState(()=>loading=false);}
   }
+  List<Map<String, String>> _parseExtraFunctions(String value) {
+    return value.split('\\n').map((line) => line.trim()).where((line) => line.isNotEmpty).take(11).map((line) {
+      final parts = line.split('|').map((part) => part.trim()).toList();
+      return <String, String>{
+        'name': parts.isNotEmpty ? parts[0] : '',
+        'date_time': parts.length > 1 ? parts[1] : '',
+        'venue': parts.length > 2 ? parts[2] : '',
+        'address': parts.length > 3 ? parts[3] : '',
+      };
+    }).toList();
+  }
+
   Future<void> createInvitation() async{
     if(projects.isEmpty){setState(()=>error='Pehle Wedding Studio mein project banayein.');return;}
     final title=TextEditingController(text:'Wedding Invitation');
     final bride=TextEditingController(),groom=TextEditingController(),venue=TextEditingController(),address=TextEditingController(),date=TextEditingController(),functionName=TextEditingController(),contact=TextEditingController(),map=TextEditingController();
     String projectId=projects.first['id'].toString(),template='hindu_traditional',community='Hindu',presentationStyle='classic_card',language='gu';
-    final hosts=TextEditingController(),message=TextEditingController(),optionalWording=TextEditingController();
+    final hosts=TextEditingController(),message=TextEditingController(),optionalWording=TextEditingController(),extraFunctions=TextEditingController(),musicUrl=TextEditingController();
     bool rsvp=false;
     final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,refresh)=>AlertDialog(
       title:const Text('Create digital invitation'),
@@ -75,6 +87,8 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
         TextField(controller:hosts,decoration:const InputDecoration(labelText:'Family / hosts (optional)')),
         TextField(controller:message,decoration:const InputDecoration(labelText:'Personal message (optional)'),maxLines:3),
         TextField(controller:optionalWording,decoration:const InputDecoration(labelText:'Optional religious / blessing wording (your choice)'),maxLines:2),
+        TextField(controller:extraFunctions,decoration:const InputDecoration(labelText:'Other functions (one per line: Name | Date/time | Venue | Address)'),maxLines:4),
+        TextField(controller:musicUrl,decoration:const InputDecoration(labelText:'Optional music URL (your uploaded / licensed audio)'),keyboardType:TextInputType.url),
         SwitchListTile(value:rsvp,title:const Text('Enable RSVP field'),contentPadding:EdgeInsets.zero,onChanged:(v)=>refresh(()=>rsvp=v)),
       ]))),
       actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save draft'))],
@@ -86,11 +100,11 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
       await supabase.from('digital_wedding_invitations').insert({
         'project_id':projectId,'owner_customer_id':user.id,'title':title.text.trim().isEmpty?'Wedding Invitation':title.text.trim(),
         'template_key':template,'rsvp_enabled':rsvp,
-        'event_details':{'presentation_style':presentationStyle,'community':community,'language':language,'family_hosts':hosts.text.trim(),'custom_message':message.text.trim(),'optional_religious_wording':optionalWording.text.trim(),'bride':bride.text.trim(),'groom':groom.text.trim(),'function_name':functionName.text.trim(),'date_time':date.text.trim(),'venue':venue.text.trim(),'address':address.text.trim(),'map_link':map.text.trim(),'rsvp_contact':contact.text.trim(),'functions':[{'name':functionName.text.trim(),'date_time':date.text.trim(),'venue':venue.text.trim(),'address':address.text.trim()}]},
+        'event_details':{'presentation_style':presentationStyle,'community':community,'language':language,'family_hosts':hosts.text.trim(),'custom_message':message.text.trim(),'optional_religious_wording':optionalWording.text.trim(),'bride':bride.text.trim(),'groom':groom.text.trim(),'function_name':functionName.text.trim(),'date_time':date.text.trim(),'venue':venue.text.trim(),'address':address.text.trim(),'map_link':map.text.trim(),'rsvp_contact':contact.text.trim(),'functions':[{'name':functionName.text.trim(),'date_time':date.text.trim(),'venue':venue.text.trim(),'address':address.text.trim()},..._parseExtraFunctions(extraFunctions.text)],'music_url':musicUrl.text.trim()},
       });
       await load();
     }catch(e){if(mounted)setState(()=>error='Save failed: $e');}
-    finally{for(final c in [title,bride,groom,venue,address,date,functionName,contact,map,hosts,message,optionalWording]){c.dispose();}if(mounted)setState(()=>saving=false);}
+    finally{for(final c in [title,bride,groom,venue,address,date,functionName,contact,map,hosts,message,optionalWording,extraFunctions,musicUrl]){c.dispose();}if(mounted)setState(()=>saving=false);}
   }
   Future<void> editInvitation(Map<String,dynamic> row) async {
     final details = row['event_details'] is Map
@@ -109,6 +123,8 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
     final hosts = TextEditingController(text: details['family_hosts']?.toString() ?? '');
     final message = TextEditingController(text: details['custom_message']?.toString() ?? '');
     final optionalWording = TextEditingController(text: details['optional_religious_wording']?.toString() ?? '');
+    final extraFunctions = TextEditingController(text: ((details['functions'] is List ? (details['functions'] as List).skip(1) : const []).whereType<Map>().map((e) => [e['name'],e['date_time'],e['venue'],e['address']].map((v) => v?.toString() ?? '').join(' | ')).join('\\n')));
+    final musicUrl = TextEditingController(text: details['music_url']?.toString() ?? '');
     String language = details['language']?.toString() ?? 'gu';
     String template = row['template_key']?.toString() ?? 'hindu_traditional';
     String presentationStyle = details['presentation_style']?.toString() ?? 'classic_card';
@@ -173,6 +189,8 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
                 TextField(controller: hosts, decoration: const InputDecoration(labelText: 'Family / hosts (optional)')),
                 TextField(controller: message, decoration: const InputDecoration(labelText: 'Personal message (optional)'), maxLines: 3),
                 TextField(controller: optionalWording, decoration: const InputDecoration(labelText: 'Optional religious / blessing wording (your choice)'), maxLines: 2),
+                TextField(controller: extraFunctions, decoration: const InputDecoration(labelText: 'Other functions (one per line: Name | Date/time | Venue | Address)'), maxLines: 4),
+                TextField(controller: musicUrl, decoration: const InputDecoration(labelText: 'Optional music URL (uploaded / licensed audio)'), keyboardType: TextInputType.url),
                 SwitchListTile(
                   value: rsvp,
                   title: const Text('Enable RSVP (draft setting)'),
@@ -203,13 +221,14 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
             'family_hosts': hosts.text.trim(),
             'custom_message': message.text.trim(),
             'optional_religious_wording': optionalWording.text.trim(),
+            'music_url': musicUrl.text.trim(),
             'bride': bride.text.trim(),
             'groom': groom.text.trim(),
             'function_name': functionName.text.trim(),
             'date_time': date.text.trim(),
             'venue': venue.text.trim(),
             'address': address.text.trim(),
-            'functions': [{'name': functionName.text.trim(), 'date_time': date.text.trim(), 'venue': venue.text.trim(), 'address': address.text.trim()}],
+            'functions': [{'name': functionName.text.trim(), 'date_time': date.text.trim(), 'venue': venue.text.trim(), 'address': address.text.trim()}, ..._parseExtraFunctions(extraFunctions.text)],
             'map_link': map.text.trim(),
             'rsvp_contact': contact.text.trim(),
           },
@@ -222,7 +241,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
         if (mounted) setState(() => saving = false);
       }
     }
-    for (final c in [title, bride, groom, date, venue, address, functionName, map, contact, hosts, message, optionalWording]) {
+    for (final c in [title, bride, groom, date, venue, address, functionName, map, contact, hosts, message, optionalWording, extraFunctions, musicUrl]) {
       c.dispose();
     }
   }
