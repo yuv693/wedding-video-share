@@ -9,6 +9,7 @@ import 'package:pro_video_editor/pro_video_editor.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/backend.dart';
+import '../services/editor_media_sync_service.dart';
 
 /// Experimental on-device render path for ordered clips and independent audio tracks.
 /// Source media remains on-device; only the finished export can be shared by the customer.
@@ -86,16 +87,32 @@ class _WeddingMultiTrackExportScreenState
     _loadSavedTimeline();
   }
 
+  final _mediaSync = EditorMediaSyncService();
+
+  String _mediaMimeType(String path, {required bool audio}) {
+    final extension = path.split('.').last.toLowerCase();
+    const types = {
+      'mp4': 'video/mp4', 'mov': 'video/quicktime', 'm4v': 'video/x-m4v',
+      'webm': 'video/webm', 'mkv': 'video/x-matroska', '3gp': 'video/3gpp',
+      'mp3': 'audio/mpeg', 'm4a': 'audio/mp4', 'aac': 'audio/aac',
+      'wav': 'audio/wav', 'ogg': 'audio/ogg', 'flac': 'audio/flac',
+      'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png',
+      'webp': 'image/webp',
+    };
+    return types[extension] ?? (audio ? 'audio/mpeg' : 'video/mp4');
+  }
+
   Future<void> _loadSavedTimeline() async {
     try {
       final row = await supabase.from('wedding_editor_projects')
-          .select('timeline_json')
+          .select('id,timeline_json')
           .eq('project_id', widget.projectId)
           .order('updated_at', ascending: false)
           .limit(1)
           .maybeSingle();
       final data = row?['timeline_json'];
-      if (data is! Map) return;
+      if (data is! Map || row?['id'] == null) return;
+      final editorId = row!['id'].toString();
       final clips = data['clips'];
       final tracks = data['audioTracks'];
       final loadedClips = <PlatformFile>[];
@@ -103,7 +120,19 @@ class _WeddingMultiTrackExportScreenState
       if (clips is List) {
         for (final item in clips.whereType<Map>()) {
           final value = Map<String, dynamic>.from(item);
-          final path = value['path']?.toString();
+          var path = value['path']?.toString();
+          if (path == null || !File(path).existsSync()) {
+            final driveId = value['driveFileId']?.toString();
+            if (driveId != null && driveId.isNotEmpty) {
+              final restored = await _mediaSync.downloadFile(
+                editorProjectId: editorId,
+                fileId: driveId,
+                filename: value['name']?.toString() ?? 'Wedding clip.mp4',
+              );
+              path = restored.path;
+              value['path'] = path;
+            }
+          }
           if (path == null || !File(path).existsSync()) continue;
           loadedClips.add(PlatformFile(name: value['name']?.toString() ?? 'Wedding clip', size: File(path).lengthSync(), path: path));
           loadedClipSettings[path] = value;
@@ -114,7 +143,19 @@ class _WeddingMultiTrackExportScreenState
       if (tracks is List) {
         for (final item in tracks.whereType<Map>()) {
           final value = Map<String, dynamic>.from(item);
-          final path = value['path']?.toString();
+          var path = value['path']?.toString();
+          if (path == null || !File(path).existsSync()) {
+            final driveId = value['driveFileId']?.toString();
+            if (driveId != null && driveId.isNotEmpty) {
+              final restored = await _mediaSync.downloadFile(
+                editorProjectId: editorId,
+                fileId: driveId,
+                filename: value['name']?.toString() ?? 'Wedding music.mp3',
+              );
+              path = restored.path;
+              value['path'] = path;
+            }
+          }
           if (path == null || !File(path).existsSync()) continue;
           loadedTracks.add(PlatformFile(name: value['name']?.toString() ?? 'Music track', size: File(path).lengthSync(), path: path));
           loadedTrackSettings[path] = value;
@@ -126,7 +167,7 @@ class _WeddingMultiTrackExportScreenState
         if (loadedTracks.isNotEmpty) { _tracks..clear()..addAll(loadedTracks); _trackSettings..clear()..addAll(loadedTrackSettings); }
       });
     } catch (e) {
-      if (mounted) setState(() => _error = 'Could not restore saved editor timeline: $e');
+      if (mounted) setState(() => _error = 'Could not restore saved editor media: $e');
     }
   }
 
@@ -139,21 +180,71 @@ class _WeddingMultiTrackExportScreenState
         .order('updated_at', ascending: false).limit(1).maybeSingle();
     final previous = existing?['timeline_json'];
     final timeline = previous is Map ? Map<String, dynamic>.from(previous) : <String, dynamic>{};
-    timeline['version'] = 6;
+    timeline['version'] = 7;
     timeline['clips'] = _clips.map((clip) {
       final path = clip.path!;
       return <String, dynamic>{'name': clip.name, 'path': path, 'sizeBytes': clip.size, ...?_clipSettings[path]};
     }).toList();
     timeline['audioTracks'] = _tracks.map((track) {
       final path = track.path!;
-      return <String, dynamic>{'name': track.name, 'path': path, ...?_trackSettings[path]};
+      return <String, dynamic>{'name': track.name, 'path': path, 'sizeBytes': track.size, ...?_trackSettings[path]};
     }).toList();
     timeline['clipOrder'] = _clips.map((clip) => clip.path).toList();
-    timeline['editorStorageNote'] = 'Source media working copies are stored in this app private folder. Re-select files if app data is cleared or the app is reinstalled.';
+    timeline['editorStorageNote'] = 'Original source media is backed up to the connected Google Drive and can be restored on another signed-in device.';
     if (_outputPath != null) timeline['lastLocalExportPath'] = _outputPath;
     final payload = {'project_id': widget.projectId, 'owner_customer_id': project['owner_customer_id'], 'name': 'Wedding edit', 'timeline_json': timeline, 'updated_at': DateTime.now().toIso8601String()};
-    if (existing == null) { await supabase.from('wedding_editor_projects').insert(payload); }
-    else { await supabase.from('wedding_editor_projects').update(payload).eq('id', existing['id']); }
+    String editorId;
+    if (existing == null) {
+      final inserted = await supabase.from('wedding_editor_projects').insert(payload).select('id').single();
+      editorId = inserted['id'].toString();
+    } else {
+      editorId = existing['id'].toString();
+      await supabase.from('wedding_editor_projects').update(payload).eq('id', editorId);
+    }
+
+    final assets = await _mediaSync.listAssets(editorId);
+    Future<void> syncList(List<dynamic> items, bool audio) async {
+      for (final raw in items) {
+        final item = Map<String, dynamic>.from(raw as Map);
+        final driveId = item['driveFileId']?.toString();
+        if (driveId != null && driveId.isNotEmpty) continue;
+        final path = item['path']?.toString();
+        if (path == null || !File(path).existsSync()) continue;
+        final file = File(path);
+        final size = await file.length();
+        final name = item['name']?.toString() ?? (audio ? 'Wedding music' : 'Wedding clip');
+        final existingAsset = assets.where((asset) =>
+          asset['original_filename'] == name &&
+          (asset['file_size_bytes'] as num?)?.toInt() == size &&
+          asset['media_kind'] == (audio ? 'audio' : 'video')).firstOrNull;
+        if (existingAsset != null) {
+          item['driveFileId'] = existingAsset['drive_file_id'];
+        } else {
+          final uploaded = await _mediaSync.uploadFile(
+            editorProjectId: editorId,
+            file: file,
+            filename: name,
+            mimeType: _mediaMimeType(path, audio: audio),
+            mediaKind: audio ? 'audio' : 'video',
+          );
+          item['driveFileId'] = uploaded['fileId'];
+          assets.add({
+            'drive_file_id': uploaded['fileId'],
+            'original_filename': name,
+            'file_size_bytes': size,
+            'media_kind': audio ? 'audio' : 'video',
+          });
+        }
+      }
+    }
+    await syncList(timeline['clips'] as List, false);
+    await syncList(timeline['audioTracks'] as List, true);
+    timeline['driveMediaSyncedAt'] = DateTime.now().toIso8601String();
+    timeline['editorStorageNote'] = 'Source video and audio are stored in Google Drive; missing local copies are restored when this project opens on another signed-in device.';
+    await supabase.from('wedding_editor_projects').update({
+      'timeline_json': timeline,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', editorId);
   }
 
   Future<void> _pickClips() async {
