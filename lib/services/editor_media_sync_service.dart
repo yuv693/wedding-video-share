@@ -107,7 +107,7 @@ class EditorMediaSyncService {
     final uri = Uri.parse('$supabaseUrl/functions/v1/wedding-editor-media').replace(
       queryParameters: {'editorProjectId': editorProjectId, 'fileId': fileId},
     );
-    final response = await http.get(uri, headers: {'Authorization': 'Bearer ${session.accessToken}', 'apikey': supabaseKey});
+    final response = await http.get(uri, headers: {'Authorization': 'Bearer ${session.accessToken}', 'apikey': supabasePublishableKey});
     if (response.statusCode != 200) throw Exception('Could not restore media from Google Drive (${response.statusCode}).');
     final directory = Directory('${(await getApplicationDocumentsDirectory()).path}/wedding_editor_media');
     await directory.create(recursive: true);
