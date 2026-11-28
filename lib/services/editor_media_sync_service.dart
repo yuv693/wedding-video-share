@@ -119,8 +119,6 @@ class EditorMediaSyncService {
       final target = File('${directory.path}/${fileId}_$safeName');
       final sink = target.openWrite();
       await response.stream.pipe(sink);
-      await sink.flush();
-      await sink.close();
       return target;
     } finally {
       client.close();
