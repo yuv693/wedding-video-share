@@ -110,18 +110,8 @@ jobs:
             echo "Release keystore secrets are not configured; this build will use the development signing key."
           fi
 
-      - name: Build Android App Bundle
-        run: flutter build appbundle --release
-
       - name: Build installable Android APK
         run: flutter build apk --release
-
-      - name: Upload AAB artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: wedding-video-share-android-aab
-          path: build/app/outputs/bundle/release/*.aab
-          if-no-files-found: error
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
