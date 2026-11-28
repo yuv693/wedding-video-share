@@ -213,10 +213,15 @@ class _WeddingMultiTrackExportScreenState
         final file = File(path);
         final size = await file.length();
         final name = item['name']?.toString() ?? (audio ? 'Wedding music' : 'Wedding clip');
-        final existingAsset = assets.where((asset) =>
-          asset['original_filename'] == name &&
-          (asset['file_size_bytes'] as num?)?.toInt() == size &&
-          asset['media_kind'] == (audio ? 'audio' : 'video')).firstOrNull;
+        Map<String, dynamic>? existingAsset;
+        for (final asset in assets) {
+          if (asset['original_filename'] == name &&
+              (asset['file_size_bytes'] as num?)?.toInt() == size &&
+              asset['media_kind'] == (audio ? 'audio' : 'video')) {
+            existingAsset = asset;
+            break;
+          }
+        }
         if (existingAsset != null) {
           item['driveFileId'] = existingAsset['drive_file_id'];
         } else {
