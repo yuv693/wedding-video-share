@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/backend.dart';
@@ -24,6 +27,34 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
     }catch(e){error='Could not load invitations: $e';}
     finally{if(mounted)setState(()=>loading=false);}
   }
+  Future<void> _chooseInvitationPhoto(TextEditingController controller, VoidCallback refresh) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: false, withData: false);
+      final path = result?.files.single.path;
+      if (path == null) return;
+      final file = File(path);
+      final extension = path.split('.').last.toLowerCase();
+      final mime = switch (extension) {
+        'png' => 'image/png',
+        'webp' => 'image/webp',
+        _ => 'image/jpeg',
+      };
+      final user = supabase.auth.currentUser;
+      if (user == null) throw Exception('Please sign in again.');
+      if (await file.length() > 12 * 1024 * 1024) throw Exception('Invitation photo must be 12 MB or smaller.');
+      final storagePath = '${user.id}/${DateTime.now().microsecondsSinceEpoch}.${extension == 'jpeg' ? 'jpg' : extension}';
+      await supabase.storage.from('wedding-invitation-assets').upload(
+        storagePath,
+        file,
+        fileOptions: FileOptions(contentType: mime, upsert: true),
+      );
+      controller.text = supabase.storage.from('wedding-invitation-assets').getPublicUrl(storagePath);
+      refresh();
+    } catch (e) {
+      if (mounted) setState(() => error = 'Photo upload failed: $e');
+    }
+  }
+
   List<Map<String, String>> _parseExtraFunctions(String value) {
     return value.split('\\n').map((line) => line.trim()).where((line) => line.isNotEmpty).take(11).map((line) {
       final parts = line.split('|').map((part) => part.trim()).toList();
@@ -41,7 +72,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
     final title=TextEditingController(text:'Wedding Invitation');
     final bride=TextEditingController(),groom=TextEditingController(),venue=TextEditingController(),address=TextEditingController(),date=TextEditingController(),functionName=TextEditingController(),contact=TextEditingController(),map=TextEditingController();
     String projectId=projects.first['id'].toString(),template='hindu_traditional',community='Hindu',presentationStyle='classic_card',language='gu';
-    final hosts=TextEditingController(),message=TextEditingController(),optionalWording=TextEditingController(),extraFunctions=TextEditingController(),musicUrl=TextEditingController();
+    final hosts=TextEditingController(),message=TextEditingController(),optionalWording=TextEditingController(),extraFunctions=TextEditingController(),musicUrl=TextEditingController(),photoUrl=TextEditingController();
     bool rsvp=false;
     final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,refresh)=>AlertDialog(
       title:const Text('Create digital invitation'),
@@ -89,6 +120,8 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
         TextField(controller:optionalWording,decoration:const InputDecoration(labelText:'Optional religious / blessing wording (your choice)'),maxLines:2),
         TextField(controller:extraFunctions,decoration:const InputDecoration(labelText:'Other functions (one per line: Name | Date/time | Venue | Address)'),maxLines:4),
         TextField(controller:musicUrl,decoration:const InputDecoration(labelText:'Optional music URL (your uploaded / licensed audio)'),keyboardType:TextInputType.url),
+        OutlinedButton.icon(onPressed:()=>_chooseInvitationPhoto(photoUrl,()=>refresh((){})),icon:const Icon(Icons.photo_library_outlined),label:const Text('Choose and upload couple photo')),
+        TextField(controller:photoUrl,decoration:const InputDecoration(labelText:'Uploaded invitation photo URL'),readOnly:true),
         SwitchListTile(value:rsvp,title:const Text('Enable RSVP field'),contentPadding:EdgeInsets.zero,onChanged:(v)=>refresh(()=>rsvp=v)),
       ]))),
       actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Save draft'))],
@@ -100,11 +133,11 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
       await supabase.from('digital_wedding_invitations').insert({
         'project_id':projectId,'owner_customer_id':user.id,'title':title.text.trim().isEmpty?'Wedding Invitation':title.text.trim(),
         'template_key':template,'rsvp_enabled':rsvp,
-        'event_details':{'presentation_style':presentationStyle,'community':community,'language':language,'family_hosts':hosts.text.trim(),'custom_message':message.text.trim(),'optional_religious_wording':optionalWording.text.trim(),'bride':bride.text.trim(),'groom':groom.text.trim(),'function_name':functionName.text.trim(),'date_time':date.text.trim(),'venue':venue.text.trim(),'address':address.text.trim(),'map_link':map.text.trim(),'rsvp_contact':contact.text.trim(),'functions':[{'name':functionName.text.trim(),'date_time':date.text.trim(),'venue':venue.text.trim(),'address':address.text.trim()},..._parseExtraFunctions(extraFunctions.text)],'music_url':musicUrl.text.trim()},
+        'event_details':{'presentation_style':presentationStyle,'community':community,'language':language,'family_hosts':hosts.text.trim(),'custom_message':message.text.trim(),'optional_religious_wording':optionalWording.text.trim(),'bride':bride.text.trim(),'groom':groom.text.trim(),'function_name':functionName.text.trim(),'date_time':date.text.trim(),'venue':venue.text.trim(),'address':address.text.trim(),'map_link':map.text.trim(),'rsvp_contact':contact.text.trim(),'functions':[{'name':functionName.text.trim(),'date_time':date.text.trim(),'venue':venue.text.trim(),'address':address.text.trim()},..._parseExtraFunctions(extraFunctions.text)],'music_url':musicUrl.text.trim(),'photo_url':photoUrl.text.trim()},
       });
       await load();
     }catch(e){if(mounted)setState(()=>error='Save failed: $e');}
-    finally{for(final c in [title,bride,groom,venue,address,date,functionName,contact,map,hosts,message,optionalWording,extraFunctions,musicUrl]){c.dispose();}if(mounted)setState(()=>saving=false);}
+    finally{for(final c in [title,bride,groom,venue,address,date,functionName,contact,map,hosts,message,optionalWording,extraFunctions,musicUrl,photoUrl]){c.dispose();}if(mounted)setState(()=>saving=false);}
   }
   Future<void> editInvitation(Map<String,dynamic> row) async {
     final details = row['event_details'] is Map
@@ -125,6 +158,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
     final optionalWording = TextEditingController(text: details['optional_religious_wording']?.toString() ?? '');
     final extraFunctions = TextEditingController(text: ((details['functions'] is List ? (details['functions'] as List).skip(1) : const []).whereType<Map>().map((e) => [e['name'],e['date_time'],e['venue'],e['address']].map((v) => v?.toString() ?? '').join(' | ')).join('\\n')));
     final musicUrl = TextEditingController(text: details['music_url']?.toString() ?? '');
+    final photoUrl = TextEditingController(text: details['photo_url']?.toString() ?? '');
     String language = details['language']?.toString() ?? 'gu';
     String template = row['template_key']?.toString() ?? 'hindu_traditional';
     String presentationStyle = details['presentation_style']?.toString() ?? 'classic_card';
@@ -191,6 +225,8 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
                 TextField(controller: optionalWording, decoration: const InputDecoration(labelText: 'Optional religious / blessing wording (your choice)'), maxLines: 2),
                 TextField(controller: extraFunctions, decoration: const InputDecoration(labelText: 'Other functions (one per line: Name | Date/time | Venue | Address)'), maxLines: 4),
                 TextField(controller: musicUrl, decoration: const InputDecoration(labelText: 'Optional music URL (uploaded / licensed audio)'), keyboardType: TextInputType.url),
+                OutlinedButton.icon(onPressed: () => _chooseInvitationPhoto(photoUrl, () => refresh(() {})), icon: const Icon(Icons.photo_library_outlined), label: const Text('Choose and upload couple photo')),
+                TextField(controller: photoUrl, decoration: const InputDecoration(labelText: 'Uploaded invitation photo URL'), readOnly: true),
                 SwitchListTile(
                   value: rsvp,
                   title: const Text('Enable RSVP (draft setting)'),
@@ -222,6 +258,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
             'custom_message': message.text.trim(),
             'optional_religious_wording': optionalWording.text.trim(),
             'music_url': musicUrl.text.trim(),
+            'photo_url': photoUrl.text.trim(),
             'bride': bride.text.trim(),
             'groom': groom.text.trim(),
             'function_name': functionName.text.trim(),
@@ -241,7 +278,7 @@ class _WeddingInvitationScreenState extends State<WeddingInvitationScreen>{
         if (mounted) setState(() => saving = false);
       }
     }
-    for (final c in [title, bride, groom, date, venue, address, functionName, map, contact, hosts, message, optionalWording, extraFunctions, musicUrl]) {
+    for (final c in [title, bride, groom, date, venue, address, functionName, map, contact, hosts, message, optionalWording, extraFunctions, musicUrl, photoUrl]) {
       c.dispose();
     }
   }
