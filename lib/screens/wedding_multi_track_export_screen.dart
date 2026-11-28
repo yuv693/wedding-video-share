@@ -8,17 +8,21 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pro_video_editor/pro_video_editor.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../services/backend.dart';
+
 /// Experimental on-device render path for ordered clips and independent audio tracks.
 /// Source media remains on-device; only the finished export can be shared by the customer.
 class WeddingMultiTrackExportScreen extends StatefulWidget {
   const WeddingMultiTrackExportScreen({
     super.key,
     required this.projectTitle,
+    required this.projectId,
     this.initialClips = const [],
     this.initialAudioTracks = const [],
   });
 
   final String projectTitle;
+  final String projectId;
   final List<Map<String, dynamic>> initialClips;
   final List<Map<String, dynamic>> initialAudioTracks;
 
@@ -79,6 +83,77 @@ class _WeddingMultiTrackExportScreenState
         'fadeOutMs': (track['fadeOutMs'] as num?)?.toInt() ?? 0,
       };
     }
+    _loadSavedTimeline();
+  }
+
+  Future<void> _loadSavedTimeline() async {
+    try {
+      final row = await supabase.from('wedding_editor_projects')
+          .select('timeline_json')
+          .eq('project_id', widget.projectId)
+          .order('updated_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      final data = row?['timeline_json'];
+      if (data is! Map) return;
+      final clips = data['clips'];
+      final tracks = data['audioTracks'];
+      final loadedClips = <PlatformFile>[];
+      final loadedClipSettings = <String, Map<String, dynamic>>{};
+      if (clips is List) {
+        for (final item in clips.whereType<Map>()) {
+          final value = Map<String, dynamic>.from(item);
+          final path = value['path']?.toString();
+          if (path == null || !File(path).existsSync()) continue;
+          loadedClips.add(PlatformFile(name: value['name']?.toString() ?? 'Wedding clip', size: File(path).lengthSync(), path: path));
+          loadedClipSettings[path] = value;
+        }
+      }
+      final loadedTracks = <PlatformFile>[];
+      final loadedTrackSettings = <String, Map<String, dynamic>>{};
+      if (tracks is List) {
+        for (final item in tracks.whereType<Map>()) {
+          final value = Map<String, dynamic>.from(item);
+          final path = value['path']?.toString();
+          if (path == null || !File(path).existsSync()) continue;
+          loadedTracks.add(PlatformFile(name: value['name']?.toString() ?? 'Music track', size: File(path).lengthSync(), path: path));
+          loadedTrackSettings[path] = value;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        if (loadedClips.isNotEmpty) { _clips..clear()..addAll(loadedClips); _clipSettings..clear()..addAll(loadedClipSettings); }
+        if (loadedTracks.isNotEmpty) { _tracks..clear()..addAll(loadedTracks); _trackSettings..clear()..addAll(loadedTrackSettings); }
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Could not restore saved editor timeline: $e');
+    }
+  }
+
+  Future<void> _saveTimelineDraft() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) throw Exception('Please sign in again.');
+    final project = await supabase.from('wedding_projects').select('owner_customer_id').eq('id', widget.projectId).single();
+    final existing = await supabase.from('wedding_editor_projects')
+        .select('id,timeline_json').eq('project_id', widget.projectId)
+        .order('updated_at', ascending: false).limit(1).maybeSingle();
+    final previous = existing?['timeline_json'];
+    final timeline = previous is Map ? Map<String, dynamic>.from(previous) : <String, dynamic>{};
+    timeline['version'] = 6;
+    timeline['clips'] = _clips.map((clip) {
+      final path = clip.path!;
+      return <String, dynamic>{'name': clip.name, 'path': path, 'sizeBytes': clip.size, ...?_clipSettings[path]};
+    }).toList();
+    timeline['audioTracks'] = _tracks.map((track) {
+      final path = track.path!;
+      return <String, dynamic>{'name': track.name, 'path': path, ...?_trackSettings[path]};
+    }).toList();
+    timeline['clipOrder'] = _clips.map((clip) => clip.path).toList();
+    timeline['editorStorageNote'] = 'Source media working copies are stored in this app private folder. Re-select files if app data is cleared or the app is reinstalled.';
+    if (_outputPath != null) timeline['lastLocalExportPath'] = _outputPath;
+    final payload = {'project_id': widget.projectId, 'owner_customer_id': project['owner_customer_id'], 'name': 'Wedding edit', 'timeline_json': timeline, 'updated_at': DateTime.now().toIso8601String()};
+    if (existing == null) { await supabase.from('wedding_editor_projects').insert(payload); }
+    else { await supabase.from('wedding_editor_projects').update(payload).eq('id', existing['id']); }
   }
 
   Future<void> _pickClips() async {
@@ -257,6 +332,7 @@ class _WeddingMultiTrackExportScreenState
         _outputPath = output;
         _progress = 1;
       });
+      await _saveTimelineDraft();
     } catch (e) {
       if (mounted) setState(() => _error = 'Export failed: $e');
     } finally {
@@ -420,6 +496,15 @@ class _WeddingMultiTrackExportScreenState
             title: const Text('Warm wedding colour filter'),
           ),
           const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: _working ? null : () async {
+              try { await _saveTimelineDraft(); if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Wedding edit timeline saved.'))); }
+              catch (e) { if (mounted) setState(() => _error = 'Could not save timeline: $e'); }
+            },
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Save editable timeline'),
+          ),
+          const SizedBox(height: 8),
           FilledButton.icon(
             onPressed: _working ? null : _export,
             icon: const Icon(Icons.movie_creation_outlined),
