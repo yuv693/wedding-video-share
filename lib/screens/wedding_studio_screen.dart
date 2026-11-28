@@ -350,6 +350,7 @@ class _WeddingTimelineDraftScreenState extends State<WeddingTimelineDraftScreen>
         : <Map<String, dynamic>>[];
     await Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => WeddingMultiTrackExportScreen(
+        projectId: widget.projectId,
         projectTitle: widget.projectTitle,
         initialClips: clips,
         initialAudioTracks: tracks,
