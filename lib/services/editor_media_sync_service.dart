@@ -107,13 +107,23 @@ class EditorMediaSyncService {
     final uri = Uri.parse('$supabaseUrl/functions/v1/wedding-editor-media').replace(
       queryParameters: {'editorProjectId': editorProjectId, 'fileId': fileId},
     );
-    final response = await http.get(uri, headers: {'Authorization': 'Bearer ${session.accessToken}', 'apikey': supabasePublishableKey});
-    if (response.statusCode != 200) throw Exception('Could not restore media from Google Drive (${response.statusCode}).');
-    final directory = Directory('${(await getApplicationDocumentsDirectory()).path}/wedding_editor_media');
-    await directory.create(recursive: true);
-    final safeName = filename.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-    final target = File('${directory.path}/${fileId}_$safeName');
-    await target.writeAsBytes(response.bodyBytes, flush: true);
-    return target;
+    final client = http.Client();
+    try {
+      final request = http.Request('GET', uri)
+        ..headers.addAll({'Authorization': 'Bearer ${session.accessToken}', 'apikey': supabasePublishableKey});
+      final response = await client.send(request);
+      if (response.statusCode != 200) throw Exception('Could not restore media from Google Drive (${response.statusCode}).');
+      final directory = Directory('${(await getApplicationDocumentsDirectory()).path}/wedding_editor_media');
+      await directory.create(recursive: true);
+      final safeName = filename.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final target = File('${directory.path}/${fileId}_$safeName');
+      final sink = target.openWrite();
+      await response.stream.pipe(sink);
+      await sink.flush();
+      await sink.close();
+      return target;
+    } finally {
+      client.close();
+    }
   }
 }
